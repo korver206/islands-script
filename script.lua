@@ -269,13 +269,6 @@ local function duplicateItem()
         return
     end
     
-    local backpack = player:FindFirstChild("Backpack")
-    if not backpack then
-        updateStatus("No backpack found.")
-        duplicating = false
-        return
-    end
-    
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
     updateStatus("Duplicating " .. tool.Name .. " x" .. amount)
     
@@ -283,6 +276,14 @@ local function duplicateItem()
         updateStatus("Run scan first to find remotes.")
         duplicating = false
         return
+    end
+    
+    -- Prioritize inventory/hotbar remotes
+    local inventoryRemotes = {}
+    for _, remote in ipairs(allRemotes) do
+        if string.find(remote.Name:lower(), "inventory") or string.find(remote.Name:lower(), "hotbar") or string.find(remote.Name:lower(), "add") or string.find(remote.Name:lower(), "give") then
+            table.insert(inventoryRemotes, remote)
+        end
     end
     
     local saveRemote = nil
@@ -294,29 +295,33 @@ local function duplicateItem()
     end
     
     if debugMode then
-        print("[Islands Dupe] Found " .. #allRemotes .. " remotes, trying each for dupe.")
+        print("[Islands Dupe] Found " .. #allRemotes .. " remotes, prioritizing " .. #inventoryRemotes .. " inventory remotes.")
         print("[Islands Dupe] Using save remote: " .. (saveRemote and saveRemote.Name or "none"))
     end
     
     local successCount = 0
     for i = 1, amount do
-        -- Local clone for immediate visibility
-        local cloneTool = tool:Clone()
-        cloneTool.Parent = backpack
-        
-        -- Server-side add for legitimacy
         local success = false
         local triedArgs = 0
-        for _, remote in ipairs(allRemotes) do
+        local initialCount = #backpack:GetChildren()
+
+        -- Try inventory remotes first
+        for _, remote in ipairs(inventoryRemotes) do
             local argSets = {
                 {tool.Name, 1},
                 {tool, 1},
                 {tool.Name, amount},
                 {player, tool.Name, 1},
                 {1, tool.Name},
-                {tool}
+                {tool},
+                {tool.Name, 1, "craft"},
+                {player, tool.Name, 1, "process"},
+                {tool.Name, 1, player.UserId},
+                {"add", tool.Name, 1},
+                {tool.Name, 1, "furnace"},
+                {tool.Name, 1, "anvil"}
             }
-            
+
             for _, args in ipairs(argSets) do
                 triedArgs = triedArgs + 1
                 local ok = pcall(function()
@@ -326,28 +331,84 @@ local function duplicateItem()
                         remote:InvokeServer(unpack(args))
                     end
                 end)
-                
+
                 if ok and debugMode then
-                    print("[Islands Dupe] Tried remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
+                    print("[Islands Dupe] Tried inventory remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
                 end
-                
-                if ok then
+
+                -- Check if item was added
+                wait(0.1)
+                local newCount = #backpack:GetChildren()
+                if newCount > initialCount then
                     success = true
+                    if debugMode then
+                        print("[Islands Dupe] Success! Item added via " .. remote.Name)
+                    end
                     break
                 end
             end
             if success then break end
         end
-        
-        if debugMode then
-            print("[Islands Dupe] Tried " .. triedArgs .. " arg combinations across remotes.")
+
+        -- If no success with inventory, try all remotes
+        if not success then
+            for _, remote in ipairs(allRemotes) do
+                local argSets = {
+                    {tool.Name, 1},
+                    {tool, 1},
+                    {tool.Name, amount},
+                    {player, tool.Name, 1},
+                    {1, tool.Name},
+                    {tool},
+                    {tool.Name, 1, "craft"},
+                    {player, tool.Name, 1, "process"},
+                    {tool.Name, 1, player.UserId},
+                    {"add", tool.Name, 1},
+                    {tool.Name, 1, "furnace"},
+                    {tool.Name, 1, "anvil"}
+                }
+
+                for _, args in ipairs(argSets) do
+                    triedArgs = triedArgs + 1
+                    local ok = pcall(function()
+                        if remote:IsA("RemoteEvent") then
+                            remote:FireServer(unpack(args))
+                        else
+                            remote:InvokeServer(unpack(args))
+                        end
+                    end)
+
+                    if ok and debugMode then
+                        print("[Islands Dupe] Tried remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
+                    end
+
+                    -- Check if item was added
+                    wait(0.1)
+                    local newCount = #backpack:GetChildren()
+                    if newCount > initialCount then
+                        success = true
+                        if debugMode then
+                            print("[Islands Dupe] Success! Item added via " .. remote.Name)
+                        end
+                        break
+                    end
+                end
+                if success then break end
+            end
         end
-        
+
+        if debugMode then
+            print("[Islands Dupe] Dupe attempt " .. i .. " tried " .. triedArgs .. " arg combinations.")
+        end
+
         if success then
             successCount = successCount + 1
             wait(delayTime)
         else
             cloneTool:Destroy()  -- Remove local if server fails
+            if debugMode then
+                print("[Islands Dupe] Failed to add item legitimately, removed local clone.")
+            end
             break
         end
     end
