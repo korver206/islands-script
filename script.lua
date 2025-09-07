@@ -395,6 +395,14 @@ local function duplicateItem()
         return
     end
 
+    -- Check if item already exists in backpack (to avoid multiple instances)
+    local existingTool = backpack:FindFirstChild(tool.Name)
+    if existingTool then
+        updateStatus("Item already exists in backpack. Cannot duplicate to avoid anti-cheat.")
+        duplicating = false
+        return
+    end
+
     local successCount = 0
     for i = 1, amount do
         -- Add to backpack
