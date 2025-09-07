@@ -169,7 +169,7 @@ local function scanRemotes()
     end
     local remotesFound = {}
     
-    local possibleNames = {"craft", "inv", "inventory", "hotbar", "dupe", "additem", "giveitem", "addtool", "give", "replicate", "save", "update", "process", "crafting"}
+    local possibleNames = {"craft", "inv", "inventory", "hotbar", "dupe", "additem", "giveitem", "addtool", "give", "replicate", "process", "crafting", "furnace", "smelter", "anvil", "table", "updateinventory"}
     
     local areas = {ReplicatedStorage, workspace}
     if player.PlayerGui then
@@ -244,13 +244,18 @@ local function duplicateItem()
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
     updateStatus("Duplicating " .. tool.Name .. " x" .. amount)
     
-    local possibleNames = {"inventory", "hotbar", "additem", "giveitem", "addtool", "give", "replicate", "process", "crafting"}
+    local possibleNames = {"inventory", "hotbar", "additem", "giveitem", "addtool", "give", "replicate", "process", "crafting", "furnace", "smelter", "anvil", "table", "updateinventory"}
     local dupeRemote = nil
     for _, name in ipairs(possibleNames) do
         dupeRemote = findRemote({name}, ReplicatedStorage)
         if dupeRemote then break end
     end
-    local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
+    local saveRemote = findRemote({"save", "update", "datastore", "savedata"}, ReplicatedStorage)
+    
+    if debugMode then
+        print("[Islands Dupe] Using dupe remote: " .. (dupeRemote and dupeRemote.Name or "none"))
+        print("[Islands Dupe] Using save remote: " .. (saveRemote and saveRemote.Name or "none"))
+    end
     
     if not dupeRemote then
         updateStatus("No duplication remote found. Run scan first.")
@@ -267,16 +272,35 @@ local function duplicateItem()
         -- Server-side add for legitimacy
         local success = pcall(function()
             if dupeRemote:IsA("RemoteEvent") then
-                dupeRemote:FireServer(tool.Name, amount, player)  -- Common args for Islands inventory add
+                dupeRemote:FireServer(tool.Name, 1)  -- Fire with item name and quantity 1 for crafting/process dupe
             else
-                dupeRemote:InvokeServer(tool.Name, amount, player)
+                dupeRemote:InvokeServer(tool.Name, 1)
             end
         end)
         
+        if debugMode then
+            print("[Islands Dupe] Fired dupe remote with args: " .. tool.Name .. ", 1")
+        end
+        
         if success then
             successCount = successCount + 1
-            saveData(saveRemote)
             wait(delayTime)
+        end
+    end
+    
+    -- Fire save after all dupes for persistence
+    if saveRemote then
+        pcall(function()
+            if saveRemote:IsA("RemoteEvent") then
+                saveRemote:FireServer()
+            else
+                saveRemote:InvokeServer()
+            end
+        end)
+        if debugMode then
+            print("[Islands Dupe] Fired save remote after dupes")
+        end
+    end
         else
             cloneTool:Destroy()  -- Remove local if server fails
             break
