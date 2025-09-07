@@ -23,8 +23,8 @@ screenGui.Name = "IslandsDupeUI"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 400, 0, 550)
-mainFrame.Position = UDim2.new(0, 10, 1, -560)
+mainFrame.Size = UDim2.new(0, 400, 0, 600)
+mainFrame.Position = UDim2.new(0, 10, 1, -610)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BackgroundTransparency = 0.2
 mainFrame.BorderSizePixel = 0
@@ -149,7 +149,7 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.Parent = mainFrame
 
 local scanResults = Instance.new("ScrollingFrame")
-scanResults.Size = UDim2.new(0.9, 0, 0, 100)
+scanResults.Size = UDim2.new(0.9, 0, 0, 80)
 scanResults.Position = UDim2.new(0.05, 0, 0, 290)
 scanResults.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 scanResults.BackgroundTransparency = 0.3
@@ -167,7 +167,7 @@ resultsLayout.Parent = scanResults
 
 local consoleFrame = Instance.new("ScrollingFrame")
 consoleFrame.Size = UDim2.new(0.9, 0, 0, 150)
-consoleFrame.Position = UDim2.new(0.05, 0, 0, 400)
+consoleFrame.Position = UDim2.new(0.05, 0, 0, 380)
 consoleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 consoleFrame.BackgroundTransparency = 0.1
 consoleFrame.BorderSizePixel = 2
@@ -348,60 +348,44 @@ end
 local function duplicateItem()
     if duplicating then return end
     duplicating = true
-    
+
     local character = player.Character
     if not character then
         updateStatus("No character found.")
         duplicating = false
         return
     end
-    
+
     local tool = character:FindFirstChildOfClass("Tool")
     if not tool then
         updateStatus("No tool held.")
         duplicating = false
         return
     end
-    
+
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
-    updateStatus("Duplicating " .. tool.Name .. " x" .. amount)
-    
+    updateStatus("Spawning " .. tool.Name .. " x" .. amount .. " in front of you")
+
     if #allRemotes == 0 then
         updateStatus("Run scan first to find remotes.")
         duplicating = false
         return
     end
-    
-    -- Prioritize inventory/hotbar remotes
-    local inventoryRemotes = {}
-    for _, remote in ipairs(allRemotes) do
-        if string.find(remote.Name:lower(), "inventory") or string.find(remote.Name:lower(), "hotbar") or string.find(remote.Name:lower(), "add") or string.find(remote.Name:lower(), "give") then
-            table.insert(inventoryRemotes, remote)
-        end
-    end
-    
-    local saveRemote = nil
-    for _, remote in ipairs(allRemotes) do
-        if string.find(remote.Name:lower(), "save") or string.find(remote.Name:lower(), "update") or string.find(remote.Name:lower(), "datastore") then
-            saveRemote = remote
-            break
-        end
-    end
-    
-    if debugMode then
-        print("[Islands Dupe] Found " .. #allRemotes .. " remotes, prioritizing " .. #inventoryRemotes .. " inventory remotes.")
-        print("[Islands Dupe] Using save remote: " .. (saveRemote and saveRemote.Name or "none"))
-    end
-    
+
     local successCount = 0
     for i = 1, amount do
-        -- Always create shadow dupe first
+        -- Spawn real item in front of player
         local cloneTool = tool:Clone()
-        cloneTool.Parent = backpack
-        successCount = successCount + 1
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local forward = hrp.CFrame.LookVector
+            cloneTool.Handle.CFrame = hrp.CFrame + forward * 5 + Vector3.new(0, 2, 0)
+            cloneTool.Parent = workspace
+            successCount = successCount + 1
+        end
 
         if debugMode then
-            print("[Islands Dupe] Created shadow dupe " .. i .. "/" .. amount)
+            print("[Islands Dupe] Spawned item " .. i .. "/" .. amount)
         end
 
         -- Try legitimate dupe in background
@@ -448,22 +432,8 @@ local function duplicateItem()
 
         wait(delayTime)
     end
-    
-    -- Fire save after all dupes for persistence
-    if saveRemote then
-        pcall(function()
-            if saveRemote:IsA("RemoteEvent") then
-                saveRemote:FireServer()
-            else
-                saveRemote:InvokeServer()
-            end
-        end)
-        if debugMode then
-            print("[Islands Dupe] Fired save remote after dupes")
-        end
-    end
-    
-    updateStatus("Duplicated " .. successCount .. "/" .. amount .. " items legitimately.")
+
+    updateStatus("Spawned " .. successCount .. "/" .. amount .. " items in front of you.")
     duplicating = false
 end
 
@@ -480,7 +450,7 @@ scanButton.MouseButton1Click:Connect(scanRemotes)
 -- Clear console button (add to UI)
 local clearButton = Instance.new("TextButton")
 clearButton.Size = UDim2.new(0.45, 0, 0, 30)
-clearButton.Position = UDim2.new(0.05, 0, 0, 360)
+clearButton.Position = UDim2.new(0.05, 0, 0, 540)
 clearButton.Text = "Clear Console"
 clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 clearButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
@@ -502,7 +472,7 @@ shimmerEffect(magentaTrimClear)
 
 local copyButton = Instance.new("TextButton")
 copyButton.Size = UDim2.new(0.45, 0, 0, 30)
-copyButton.Position = UDim2.new(0.5, 0, 0, 360)
+copyButton.Position = UDim2.new(0.5, 0, 0, 540)
 copyButton.Text = "Copy Console"
 copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 copyButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
@@ -556,5 +526,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+-- Auto scan on load
+scanRemotes()
+
 updateStatus("Script loaded. Press G to toggle.")
-print("[Islands Dupe] New script loaded.")
+print("[Islands Dupe] New script loaded with auto-scan.")
