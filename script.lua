@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local LogService = game:GetService("LogService")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
@@ -22,8 +23,8 @@ screenGui.Name = "IslandsDupeUI"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 300, 0, 450)
-mainFrame.Position = UDim2.new(0, 10, 1, -460)
+mainFrame.Size = UDim2.new(0, 400, 0, 550)
+mainFrame.Position = UDim2.new(0, 10, 1, -560)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 mainFrame.BackgroundTransparency = 0.2
 mainFrame.BorderSizePixel = 0
@@ -148,7 +149,7 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.Parent = mainFrame
 
 local scanResults = Instance.new("ScrollingFrame")
-scanResults.Size = UDim2.new(0.9, 0, 0, 150)
+scanResults.Size = UDim2.new(0.9, 0, 0, 100)
 scanResults.Position = UDim2.new(0.05, 0, 0, 290)
 scanResults.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 scanResults.BackgroundTransparency = 0.3
@@ -164,12 +165,76 @@ local resultsLayout = Instance.new("UIListLayout")
 resultsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 resultsLayout.Parent = scanResults
 
+local consoleFrame = Instance.new("ScrollingFrame")
+consoleFrame.Size = UDim2.new(0.9, 0, 0, 150)
+consoleFrame.Position = UDim2.new(0.05, 0, 0, 400)
+consoleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+consoleFrame.BackgroundTransparency = 0.3
+consoleFrame.BorderSizePixel = 0
+consoleFrame.ScrollBarThickness = 8
+consoleFrame.Parent = mainFrame
+
+local consoleCorner = Instance.new("UICorner")
+consoleCorner.CornerRadius = UDim.new(0, 5)
+consoleCorner.Parent = consoleFrame
+
+local consoleLayout = Instance.new("UIListLayout")
+consoleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+consoleLayout.Parent = consoleFrame
+
+local consoleTitle = Instance.new("TextLabel")
+consoleTitle.Size = UDim2.new(1, 0, 0, 20)
+consoleTitle.BackgroundTransparency = 1
+consoleTitle.Text = "Console Logs"
+consoleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+consoleTitle.TextScaled = true
+consoleTitle.Font = Enum.Font.GothamBold
+consoleTitle.Parent = consoleFrame
+
 -- Functions
 local function updateStatus(text)
     statusLabel.Text = "Status: " .. text
     if debugMode then
         print("[Islands Dupe] " .. text)
     end
+end
+
+local function addConsoleMessage(message, messageType)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -10, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = message
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.LayoutOrder = #consoleFrame:GetChildren()
+
+    if messageType == Enum.MessageType.MessageOutput then
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    elseif messageType == Enum.MessageType.MessageWarning then
+        label.TextColor3 = Color3.fromRGB(255, 255, 0)
+    elseif messageType == Enum.MessageType.MessageError then
+        label.TextColor3 = Color3.fromRGB(255, 0, 0)
+    else
+        label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
+
+    label.Parent = consoleFrame
+    consoleFrame.CanvasSize = UDim2.new(0, 0, 0, consoleLayout.AbsoluteContentSize.Y)
+
+    -- Limit to last 50 messages
+    local children = consoleFrame:GetChildren()
+    if #children > 51 then
+        children[2]:Destroy()  -- Keep title
+    end
+end
+
+local function clearConsole()
+    for _, child in ipairs(consoleFrame:GetChildren()) do
+        if child:IsA("TextLabel") and child ~= consoleTitle then
+            child:Destroy()
+        end
+    end
+    consoleFrame.CanvasSize = UDim2.new(0, 0, 0, consoleLayout.AbsoluteContentSize.Y)
 end
 
 local function findRemote(names, parent)
@@ -247,7 +312,7 @@ local function toggleDebug()
     updateStatus(debugMode and "Debug ON" or "Debug OFF")
     debugButton.Text = "Debug " .. (debugMode and "ON" or "OFF")
     if debugMode then
-        print("[Islands Dupe] Debug mode enabled. Check console for logs.")
+        print("[Islands Dupe] Debug mode enabled. Check UI console logs.")
     end
 end
 
@@ -431,10 +496,40 @@ local function duplicateItem()
     duplicating = false
 end
 
+-- Console Log Capture
+LogService.MessageOut:Connect(function(message, messageType)
+    addConsoleMessage(message, messageType)
+end)
+
 -- Events
 debugButton.MouseButton1Click:Connect(toggleDebug)
 dupeButton.MouseButton1Click:Connect(duplicateItem)
 scanButton.MouseButton1Click:Connect(scanRemotes)
+
+-- Clear console button (add to UI)
+local clearButton = Instance.new("TextButton")
+clearButton.Size = UDim2.new(0.9, 0, 0, 30)
+clearButton.Position = UDim2.new(0.05, 0, 0, 360)
+clearButton.Text = "Clear Console"
+clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+clearButton.BorderSizePixel = 0
+clearButton.Font = Enum.Font.GothamBold
+clearButton.TextScaled = true
+clearButton.Parent = mainFrame
+
+local clearCorner = Instance.new("UICorner")
+clearCorner.CornerRadius = UDim.new(0, 5)
+clearCorner.Parent = clearButton
+
+local magentaTrimClear = Instance.new("UIStroke")
+magentaTrimClear.Color = Color3.fromRGB(255, 100, 255)
+magentaTrimClear.Thickness = 2
+magentaTrimClear.Parent = clearButton
+
+shimmerEffect(magentaTrimClear)
+
+clearButton.MouseButton1Click:Connect(clearConsole)
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
