@@ -387,15 +387,7 @@ local function duplicateItem()
     end
 
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
-    local closestChest = findClosestChest(character)
-
-    if not closestChest then
-        updateStatus("No chest found nearby. Open a chest first.")
-        duplicating = false
-        return
-    end
-
-    updateStatus("Depositing " .. tool.Name .. " x" .. amount .. " into chest")
+    updateStatus("Duplicating " .. tool.Name .. " x" .. amount .. " to backpack")
 
     if #allRemotes == 0 then
         updateStatus("Run scan first to find remotes.")
@@ -405,38 +397,13 @@ local function duplicateItem()
 
     local successCount = 0
     for i = 1, amount do
-        -- Deposit into chest
+        -- Add to backpack
         local cloneTool = tool:Clone()
-
-        -- Find chest's storage or place inside
-        local storage = closestChest:FindFirstChild("Storage") or closestChest:FindFirstChild("Contents") or closestChest
-        if storage then
-            cloneTool.Parent = storage
-            if cloneTool.Handle then
-                cloneTool.Handle.Anchored = true  -- Prevent falling
-                if closestChest:IsA("Model") and closestChest.PrimaryPart then
-                    cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame
-                elseif closestChest:IsA("Part") then
-                    cloneTool.Handle.CFrame = closestChest.CFrame
-                end
-            end
-        else
-            -- Fallback: place on top but anchored
-            cloneTool.Parent = workspace
-            if cloneTool.Handle then
-                cloneTool.Handle.Anchored = true
-                if closestChest:IsA("Model") and closestChest.PrimaryPart then
-                    cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame + Vector3.new(0, 2, 0)
-                elseif closestChest:IsA("Part") then
-                    cloneTool.Handle.CFrame = closestChest.CFrame + Vector3.new(0, 2, 0)
-                end
-            end
-        end
-
+        cloneTool.Parent = backpack
         successCount = successCount + 1
 
         if debugMode then
-            print("[Islands Dupe] Deposited item " .. i .. "/" .. amount .. " into chest")
+            print("[Islands Dupe] Added item " .. i .. "/" .. amount .. " to backpack")
         end
 
         -- Try legitimate dupe in background
@@ -484,7 +451,7 @@ local function duplicateItem()
         wait(delayTime)
     end
 
-    updateStatus("Deposited " .. successCount .. "/" .. amount .. " items into chest. Check persistence by relogging.")
+    updateStatus("Added " .. successCount .. "/" .. amount .. " items to backpack. Check persistence by relogging.")
     duplicating = false
 end
 
