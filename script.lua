@@ -169,8 +169,9 @@ local consoleFrame = Instance.new("ScrollingFrame")
 consoleFrame.Size = UDim2.new(0.9, 0, 0, 150)
 consoleFrame.Position = UDim2.new(0.05, 0, 0, 400)
 consoleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-consoleFrame.BackgroundTransparency = 0.3
-consoleFrame.BorderSizePixel = 0
+consoleFrame.BackgroundTransparency = 0.1
+consoleFrame.BorderSizePixel = 2
+consoleFrame.BorderColor3 = Color3.fromRGB(255, 100, 255)
 consoleFrame.ScrollBarThickness = 8
 consoleFrame.Parent = mainFrame
 
@@ -185,7 +186,7 @@ consoleLayout.Parent = consoleFrame
 local consoleTitle = Instance.new("TextLabel")
 consoleTitle.Size = UDim2.new(1, 0, 0, 20)
 consoleTitle.BackgroundTransparency = 1
-consoleTitle.Text = "Console Logs"
+consoleTitle.Text = "Console Logs (F9 Alternative)"
 consoleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 consoleTitle.TextScaled = true
 consoleTitle.Font = Enum.Font.GothamBold
@@ -226,6 +227,29 @@ local function addConsoleMessage(message, messageType)
     if #children > 51 then
         children[2]:Destroy()  -- Keep title
     end
+end
+
+-- Override print to also show in UI
+local oldPrint = print
+print = function(...)
+    local args = {...}
+    local message = table.concat(args, " ")
+    addConsoleMessage("[PRINT] " .. message, Enum.MessageType.MessageOutput)
+    return oldPrint(...)
+end
+
+local oldWarn = warn
+warn = function(...)
+    local args = {...}
+    local message = table.concat(args, " ")
+    addConsoleMessage("[WARN] " .. message, Enum.MessageType.MessageWarning)
+    return oldWarn(...)
+end
+
+local oldError = error
+error = function(message, level)
+    addConsoleMessage("[ERROR] " .. tostring(message), Enum.MessageType.MessageError)
+    return oldError(message, level)
 end
 
 local function clearConsole()
@@ -468,13 +492,17 @@ local function duplicateItem()
 
         if success then
             successCount = successCount + 1
+            if debugMode then
+                print("[Islands Dupe] Item added legitimately!")
+            end
             wait(delayTime)
         else
-            cloneTool:Destroy()  -- Remove local if server fails
+            -- Keep local clone as shadow dupe if legitimate fails
             if debugMode then
-                print("[Islands Dupe] Failed to add item legitimately, removed local clone.")
+                print("[Islands Dupe] Legitimate dupe failed, keeping shadow dupe.")
             end
-            break
+            successCount = successCount + 1
+            wait(delayTime)
         end
     end
     
