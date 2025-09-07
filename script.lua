@@ -252,6 +252,11 @@ error = function(message, level)
     return oldError(message, level)
 end
 
+-- Also capture LogService messages
+LogService.MessageOut:Connect(function(message, messageType)
+    addConsoleMessage("[LOG] " .. message, messageType)
+end)
+
 local function clearConsole()
     for _, child in ipairs(consoleFrame:GetChildren()) do
         if child:IsA("TextLabel") and child ~= consoleTitle then
@@ -390,120 +395,58 @@ local function duplicateItem()
     
     local successCount = 0
     for i = 1, amount do
-        local success = false
-        local triedArgs = 0
-        local initialCount = #backpack:GetChildren()
-
-        -- Try inventory remotes first
-        for _, remote in ipairs(inventoryRemotes) do
-            local argSets = {
-                {tool.Name, 1},
-                {tool, 1},
-                {tool.Name, amount},
-                {player, tool.Name, 1},
-                {1, tool.Name},
-                {tool},
-                {tool.Name, 1, "craft"},
-                {player, tool.Name, 1, "process"},
-                {tool.Name, 1, player.UserId},
-                {"add", tool.Name, 1},
-                {tool.Name, 1, "furnace"},
-                {tool.Name, 1, "anvil"}
-            }
-
-            for _, args in ipairs(argSets) do
-                triedArgs = triedArgs + 1
-                local ok = pcall(function()
-                    if remote:IsA("RemoteEvent") then
-                        remote:FireServer(unpack(args))
-                    else
-                        remote:InvokeServer(unpack(args))
-                    end
-                end)
-
-                if ok and debugMode then
-                    print("[Islands Dupe] Tried inventory remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
-                end
-
-                -- Check if item was added
-                wait(0.1)
-                local newCount = #backpack:GetChildren()
-                if newCount > initialCount then
-                    success = true
-                    if debugMode then
-                        print("[Islands Dupe] Success! Item added via " .. remote.Name)
-                    end
-                    break
-                end
-            end
-            if success then break end
-        end
-
-        -- If no success with inventory, try all remotes
-        if not success then
-            for _, remote in ipairs(allRemotes) do
-                local argSets = {
-                    {tool.Name, 1},
-                    {tool, 1},
-                    {tool.Name, amount},
-                    {player, tool.Name, 1},
-                    {1, tool.Name},
-                    {tool},
-                    {tool.Name, 1, "craft"},
-                    {player, tool.Name, 1, "process"},
-                    {tool.Name, 1, player.UserId},
-                    {"add", tool.Name, 1},
-                    {tool.Name, 1, "furnace"},
-                    {tool.Name, 1, "anvil"}
-                }
-
-                for _, args in ipairs(argSets) do
-                    triedArgs = triedArgs + 1
-                    local ok = pcall(function()
-                        if remote:IsA("RemoteEvent") then
-                            remote:FireServer(unpack(args))
-                        else
-                            remote:InvokeServer(unpack(args))
-                        end
-                    end)
-
-                    if ok and debugMode then
-                        print("[Islands Dupe] Tried remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
-                    end
-
-                    -- Check if item was added
-                    wait(0.1)
-                    local newCount = #backpack:GetChildren()
-                    if newCount > initialCount then
-                        success = true
-                        if debugMode then
-                            print("[Islands Dupe] Success! Item added via " .. remote.Name)
-                        end
-                        break
-                    end
-                end
-                if success then break end
-            end
-        end
+        -- Always create shadow dupe first
+        local cloneTool = tool:Clone()
+        cloneTool.Parent = backpack
+        successCount = successCount + 1
 
         if debugMode then
-            print("[Islands Dupe] Dupe attempt " .. i .. " tried " .. triedArgs .. " arg combinations.")
+            print("[Islands Dupe] Created shadow dupe " .. i .. "/" .. amount)
         end
 
-        if success then
-            successCount = successCount + 1
-            if debugMode then
-                print("[Islands Dupe] Item added legitimately!")
-            end
-            wait(delayTime)
-        else
-            -- Keep local clone as shadow dupe if legitimate fails
-            if debugMode then
-                print("[Islands Dupe] Legitimate dupe failed, keeping shadow dupe.")
-            end
-            successCount = successCount + 1
-            wait(delayTime)
+        -- Try legitimate dupe in background
+        if #allRemotes > 0 then
+            task.spawn(function()
+                local triedArgs = 0
+                for _, remote in ipairs(allRemotes) do
+                    local argSets = {
+                        {tool.Name, 1},
+                        {tool, 1},
+                        {tool.Name, amount},
+                        {player, tool.Name, 1},
+                        {1, tool.Name},
+                        {tool},
+                        {tool.Name, 1, "craft"},
+                        {player, tool.Name, 1, "process"},
+                        {tool.Name, 1, player.UserId},
+                        {"add", tool.Name, 1},
+                        {tool.Name, 1, "furnace"},
+                        {tool.Name, 1, "anvil"}
+                    }
+
+                    for _, args in ipairs(argSets) do
+                        triedArgs = triedArgs + 1
+                        local ok = pcall(function()
+                            if remote:IsA("RemoteEvent") then
+                                remote:FireServer(unpack(args))
+                            else
+                                remote:InvokeServer(unpack(args))
+                            end
+                        end)
+
+                        if ok and debugMode then
+                            print("[Islands Dupe] Tried remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
+                        end
+                    end
+                end
+
+                if debugMode then
+                    print("[Islands Dupe] Tried " .. triedArgs .. " arg combinations for legitimate dupe.")
+                end
+            end)
         end
+
+        wait(delayTime)
     end
     
     -- Fire save after all dupes for persistence
@@ -536,7 +479,7 @@ scanButton.MouseButton1Click:Connect(scanRemotes)
 
 -- Clear console button (add to UI)
 local clearButton = Instance.new("TextButton")
-clearButton.Size = UDim2.new(0.9, 0, 0, 30)
+clearButton.Size = UDim2.new(0.45, 0, 0, 30)
 clearButton.Position = UDim2.new(0.05, 0, 0, 360)
 clearButton.Text = "Clear Console"
 clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -557,7 +500,46 @@ magentaTrimClear.Parent = clearButton
 
 shimmerEffect(magentaTrimClear)
 
+local copyButton = Instance.new("TextButton")
+copyButton.Size = UDim2.new(0.45, 0, 0, 30)
+copyButton.Position = UDim2.new(0.5, 0, 0, 360)
+copyButton.Text = "Copy Console"
+copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+copyButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+copyButton.BorderSizePixel = 0
+copyButton.Font = Enum.Font.GothamBold
+copyButton.TextScaled = true
+copyButton.Parent = mainFrame
+
+local copyCorner = Instance.new("UICorner")
+copyCorner.CornerRadius = UDim.new(0, 5)
+copyCorner.Parent = copyButton
+
+local magentaTrimCopy = Instance.new("UIStroke")
+magentaTrimCopy.Color = Color3.fromRGB(255, 100, 255)
+magentaTrimCopy.Thickness = 2
+magentaTrimCopy.Parent = copyButton
+
+shimmerEffect(magentaTrimCopy)
+
+local function copyConsole()
+    local messages = {}
+    for _, child in ipairs(consoleFrame:GetChildren()) do
+        if child:IsA("TextLabel") and child ~= consoleTitle then
+            table.insert(messages, child.Text)
+        end
+    end
+    local fullText = table.concat(messages, "\n")
+    if setclipboard then
+        setclipboard(fullText)
+        updateStatus("Console copied to clipboard!")
+    else
+        updateStatus("Clipboard not available.")
+    end
+end
+
 clearButton.MouseButton1Click:Connect(clearConsole)
+copyButton.MouseButton1Click:Connect(copyConsole)
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
