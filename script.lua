@@ -257,6 +257,22 @@ LogService.MessageOut:Connect(function(message, messageType)
     addConsoleMessage("[LOG] " .. message, messageType)
 end)
 
+-- Hook into game output
+local oldOutput = game:GetService("Output")
+if oldOutput then
+    oldOutput.MessageOut:Connect(function(message, messageType)
+        addConsoleMessage("[GAME] " .. message, messageType)
+    end)
+end
+
+-- Hook into script context output
+local scriptContext = game:GetService("ScriptContext")
+if scriptContext then
+    scriptContext.Error:Connect(function(message, stack, script)
+        addConsoleMessage("[SCRIPT ERROR] " .. message, Enum.MessageType.MessageError)
+    end)
+end
+
 local function clearConsole()
     for _, child in ipairs(consoleFrame:GetChildren()) do
         if child:IsA("TextLabel") and child ~= consoleTitle then
@@ -386,6 +402,13 @@ local function duplicateItem()
         return
     end
 
+    local backpack = player:FindFirstChild("Backpack")
+    if not backpack then
+        updateStatus("No backpack found.")
+        duplicating = false
+        return
+    end
+
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
     updateStatus("Duplicating " .. tool.Name .. " x" .. amount .. " to backpack")
 
@@ -395,10 +418,10 @@ local function duplicateItem()
         return
     end
 
-    -- Check if item already exists in backpack (to avoid multiple instances)
-    local existingTool = backpack:FindFirstChild(tool.Name)
+    -- Check if item already exists in backpack or hotbar (to avoid multiple instances)
+    local existingTool = backpack:FindFirstChild(tool.Name) or character:FindFirstChild(tool.Name)
     if existingTool then
-        updateStatus("Item already exists in backpack. Cannot duplicate to avoid anti-cheat.")
+        updateStatus("Item already exists in inventory/hotbar. Cannot duplicate to avoid anti-cheat.")
         duplicating = false
         return
     end
