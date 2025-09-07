@@ -407,12 +407,32 @@ local function duplicateItem()
     for i = 1, amount do
         -- Deposit into chest
         local cloneTool = tool:Clone()
-        if closestChest:IsA("Model") and closestChest.PrimaryPart then
-            cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame + Vector3.new(0, 1, 0)
-        elseif closestChest:IsA("Part") then
-            cloneTool.Handle.CFrame = closestChest.CFrame + Vector3.new(0, 1, 0)
+
+        -- Find chest's storage or place inside
+        local storage = closestChest:FindFirstChild("Storage") or closestChest:FindFirstChild("Contents") or closestChest
+        if storage then
+            cloneTool.Parent = storage
+            if cloneTool.Handle then
+                cloneTool.Handle.Anchored = true  -- Prevent falling
+                if closestChest:IsA("Model") and closestChest.PrimaryPart then
+                    cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame
+                elseif closestChest:IsA("Part") then
+                    cloneTool.Handle.CFrame = closestChest.CFrame
+                end
+            end
+        else
+            -- Fallback: place on top but anchored
+            cloneTool.Parent = workspace
+            if cloneTool.Handle then
+                cloneTool.Handle.Anchored = true
+                if closestChest:IsA("Model") and closestChest.PrimaryPart then
+                    cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame + Vector3.new(0, 2, 0)
+                elseif closestChest:IsA("Part") then
+                    cloneTool.Handle.CFrame = closestChest.CFrame + Vector3.new(0, 2, 0)
+                end
+            end
         end
-        cloneTool.Parent = closestChest
+
         successCount = successCount + 1
 
         if debugMode then
@@ -464,7 +484,7 @@ local function duplicateItem()
         wait(delayTime)
     end
 
-    updateStatus("Deposited " .. successCount .. "/" .. amount .. " items into chest.")
+    updateStatus("Deposited " .. successCount .. "/" .. amount .. " items into chest. Check persistence by relogging.")
     duplicating = false
 end
 
