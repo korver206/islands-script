@@ -345,6 +345,29 @@ local function toggleDebug()
     end
 end
 
+local function findClosestChest(character)
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+
+    local closestChest = nil
+    local closestDist = math.huge
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") or obj:IsA("Part") then
+            local name = obj.Name:lower()
+            if string.find(name, "chest") or string.find(name, "storage") or string.find(name, "box") or string.find(name, "container") then
+                local dist = (obj:IsA("Model") and obj.PrimaryPart and (hrp.Position - obj.PrimaryPart.Position).Magnitude) or (obj:IsA("Part") and (hrp.Position - obj.Position).Magnitude)
+                if dist and dist < closestDist and dist < 50 then  -- Within 50 studs
+                    closestChest = obj
+                    closestDist = dist
+                end
+            end
+        end
+    end
+
+    return closestChest
+end
+
 local function duplicateItem()
     if duplicating then return end
     duplicating = true
@@ -364,7 +387,15 @@ local function duplicateItem()
     end
 
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
-    updateStatus("Spawning " .. tool.Name .. " x" .. amount .. " in front of you")
+    local closestChest = findClosestChest(character)
+
+    if not closestChest then
+        updateStatus("No chest found nearby. Open a chest first.")
+        duplicating = false
+        return
+    end
+
+    updateStatus("Depositing " .. tool.Name .. " x" .. amount .. " into chest")
 
     if #allRemotes == 0 then
         updateStatus("Run scan first to find remotes.")
@@ -374,18 +405,18 @@ local function duplicateItem()
 
     local successCount = 0
     for i = 1, amount do
-        -- Spawn real item in front of player
+        -- Deposit into chest
         local cloneTool = tool:Clone()
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local forward = hrp.CFrame.LookVector
-            cloneTool.Handle.CFrame = hrp.CFrame + forward * 5 + Vector3.new(0, 2, 0)
-            cloneTool.Parent = workspace
-            successCount = successCount + 1
+        if closestChest:IsA("Model") and closestChest.PrimaryPart then
+            cloneTool.Handle.CFrame = closestChest.PrimaryPart.CFrame + Vector3.new(0, 1, 0)
+        elseif closestChest:IsA("Part") then
+            cloneTool.Handle.CFrame = closestChest.CFrame + Vector3.new(0, 1, 0)
         end
+        cloneTool.Parent = closestChest
+        successCount = successCount + 1
 
         if debugMode then
-            print("[Islands Dupe] Spawned item " .. i .. "/" .. amount)
+            print("[Islands Dupe] Deposited item " .. i .. "/" .. amount .. " into chest")
         end
 
         -- Try legitimate dupe in background
@@ -433,7 +464,7 @@ local function duplicateItem()
         wait(delayTime)
     end
 
-    updateStatus("Spawned " .. successCount .. "/" .. amount .. " items in front of you.")
+    updateStatus("Deposited " .. successCount .. "/" .. amount .. " items into chest.")
     duplicating = false
 end
 
