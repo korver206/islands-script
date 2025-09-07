@@ -1,17 +1,20 @@
 -- New Roblox Islands Duplication Script
 -- Compatible with Vega X Executor
--- True duplication with persistence
+-- True duplication with persistence and comprehensive remote search
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 local enabled = true
 local duplicating = false
+local debugMode = false
 local maxAmount = 5
 local delayTime = 2
+local allRemotes = {}
 
 -- UI Creation
 local screenGui = Instance.new("ScreenGui")
@@ -77,8 +80,6 @@ magentaTrimDupe.Color = Color3.fromRGB(255, 100, 255)
 magentaTrimDupe.Thickness = 2
 magentaTrimDupe.Parent = dupeButton
 
-local TweenService = game:GetService("TweenService")
-
 local function shimmerEffect(stroke)
     local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
     local goal1 = {Color = Color3.fromRGB(255, 100, 255)}
@@ -91,9 +92,31 @@ end
 
 shimmerEffect(magentaTrimDupe)
 
+local debugButton = Instance.new("TextButton")
+debugButton.Size = UDim2.new(0.45, 0, 0, 30)
+debugButton.Position = UDim2.new(0.05, 0, 0, 130)
+debugButton.Text = "Debug OFF"
+debugButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+debugButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+debugButton.BorderSizePixel = 0
+debugButton.Font = Enum.Font.GothamBold
+debugButton.TextScaled = true
+debugButton.Parent = mainFrame
+
+local debugCorner = Instance.new("UICorner")
+debugCorner.CornerRadius = UDim.new(0, 5)
+debugCorner.Parent = debugButton
+
+local magentaTrimDebug = Instance.new("UIStroke")
+magentaTrimDebug.Color = Color3.fromRGB(255, 100, 255)
+magentaTrimDebug.Thickness = 2
+magentaTrimDebug.Parent = debugButton
+
+shimmerEffect(magentaTrimDebug)
+
 local scanButton = Instance.new("TextButton")
-scanButton.Size = UDim2.new(0.9, 0, 0, 40)
-scanButton.Position = UDim2.new(0.05, 0, 0, 130)
+scanButton.Size = UDim2.new(0.45, 0, 0, 30)
+scanButton.Position = UDim2.new(0.5, 0, 0, 130)
 scanButton.Text = "Scan Remotes"
 scanButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 scanButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
@@ -144,7 +167,9 @@ resultsLayout.Parent = scanResults
 -- Functions
 local function updateStatus(text)
     statusLabel.Text = "Status: " .. text
-    print("[Islands Dupe] " .. text)
+    if debugMode then
+        print("[Islands Dupe] " .. text)
+    end
 end
 
 local function findRemote(names, parent)
@@ -161,46 +186,47 @@ local function findRemote(names, parent)
 end
 
 local function scanRemotes()
-    updateStatus("Scanning...")
+    updateStatus("Scanning all remotes...")
     for _, child in ipairs(scanResults:GetChildren()) do
         if child:IsA("TextLabel") then
             child:Destroy()
         end
     end
-    local remotesFound = {}
+    allRemotes = {}
     
-    local possibleNames = {"craft", "inv", "inventory", "hotbar", "dupe", "additem", "giveitem", "addtool", "give", "replicate", "process", "crafting", "furnace", "smelter", "anvil", "table", "updateinventory"}
-    
-    local areas = {ReplicatedStorage, workspace}
+    local areas = {ReplicatedStorage, workspace, game:GetService("Lighting"), game:GetService("SoundService"), game:GetService("StarterGui"), game:GetService("StarterPack"), game:GetService("HttpService")}
     if player.PlayerGui then
         table.insert(areas, player.PlayerGui)
     end
+    if player.Backpack then
+        table.insert(areas, player.Backpack)
+    end
     
+    local count = 0
     for _, area in ipairs(areas) do
-        for _, name in ipairs(possibleNames) do
-            local remote = findRemote({name}, area)
-            if remote then
-                table.insert(remotesFound, remote)
+        for _, child in ipairs(area:GetDescendants()) do
+            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+                table.insert(allRemotes, child)
                 local label = Instance.new("TextLabel")
                 label.Size = UDim2.new(1, -10, 0, 25)
                 label.BackgroundTransparency = 1
-                label.Text = area.Name .. ": " .. remote.Name .. " (" .. remote.ClassName .. ")"
-                label.TextColor3 = Color3.fromRGB(0, 255, 0)
+                label.Text = area.Name .. "/" .. child:GetFullName() .. " (" .. child.ClassName .. ")"
+                label.TextColor3 = Color3.fromRGB(255, 255, 0)
                 label.TextScaled = true
                 label.Font = Enum.Font.Gotham
-                label.LayoutOrder = #scanResults:GetChildren()
+                label.LayoutOrder = count
                 label.Parent = scanResults
-                break
+                count = count + 1
             end
         end
     end
     
     scanResults.CanvasSize = UDim2.new(0, 0, 0, resultsLayout.AbsoluteContentSize.Y)
     
-    if #remotesFound > 0 then
-        updateStatus("Found " .. #remotesFound .. " potential remotes. Check UI list.")
+    if #allRemotes > 0 then
+        updateStatus("Found " .. #allRemotes .. " total remotes. Check UI list for all.")
     else
-        updateStatus("No remotes found. Game may have updated.")
+        updateStatus("No remotes found anywhere.")
     end
 end
 
@@ -213,6 +239,15 @@ local function saveData(remote)
                 remote:InvokeServer()
             end
         end)
+    end
+end
+
+local function toggleDebug()
+    debugMode = not debugMode
+    updateStatus(debugMode and "Debug ON" or "Debug OFF")
+    debugButton.Text = "Debug " .. (debugMode and "ON" or "OFF")
+    if debugMode then
+        print("[Islands Dupe] Debug mode enabled. Check console for logs.")
     end
 end
 
@@ -244,23 +279,23 @@ local function duplicateItem()
     local amount = math.min(tonumber(amountBox.Text) or 1, maxAmount)
     updateStatus("Duplicating " .. tool.Name .. " x" .. amount)
     
-    local possibleNames = {"inventory", "hotbar", "additem", "giveitem", "addtool", "give", "replicate", "process", "crafting", "furnace", "smelter", "anvil", "table", "updateinventory"}
-    local dupeRemote = nil
-    for _, name in ipairs(possibleNames) do
-        dupeRemote = findRemote({name}, ReplicatedStorage)
-        if dupeRemote then break end
-    end
-    local saveRemote = findRemote({"save", "update", "datastore", "savedata"}, ReplicatedStorage)
-    
-    if debugMode then
-        print("[Islands Dupe] Using dupe remote: " .. (dupeRemote and dupeRemote.Name or "none"))
-        print("[Islands Dupe] Using save remote: " .. (saveRemote and saveRemote.Name or "none"))
-    end
-    
-    if not dupeRemote then
-        updateStatus("No duplication remote found. Run scan first.")
+    if #allRemotes == 0 then
+        updateStatus("Run scan first to find remotes.")
         duplicating = false
         return
+    end
+    
+    local saveRemote = nil
+    for _, remote in ipairs(allRemotes) do
+        if string.find(remote.Name:lower(), "save") or string.find(remote.Name:lower(), "update") or string.find(remote.Name:lower(), "datastore") then
+            saveRemote = remote
+            break
+        end
+    end
+    
+    if debugMode then
+        print("[Islands Dupe] Found " .. #allRemotes .. " remotes, trying each for dupe.")
+        print("[Islands Dupe] Using save remote: " .. (saveRemote and saveRemote.Name or "none"))
     end
     
     local successCount = 0
@@ -270,21 +305,50 @@ local function duplicateItem()
         cloneTool.Parent = backpack
         
         -- Server-side add for legitimacy
-        local success = pcall(function()
-            if dupeRemote:IsA("RemoteEvent") then
-                dupeRemote:FireServer(tool.Name, 1)  -- Fire with item name and quantity 1 for crafting/process dupe
-            else
-                dupeRemote:InvokeServer(tool.Name, 1)
+        local success = false
+        local triedArgs = 0
+        for _, remote in ipairs(allRemotes) do
+            local argSets = {
+                {tool.Name, 1},
+                {tool, 1},
+                {tool.Name, amount},
+                {player, tool.Name, 1},
+                {1, tool.Name},
+                {tool}
+            }
+            
+            for _, args in ipairs(argSets) do
+                triedArgs = triedArgs + 1
+                local ok = pcall(function()
+                    if remote:IsA("RemoteEvent") then
+                        remote:FireServer(unpack(args))
+                    else
+                        remote:InvokeServer(unpack(args))
+                    end
+                end)
+                
+                if ok and debugMode then
+                    print("[Islands Dupe] Tried remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
+                end
+                
+                if ok then
+                    success = true
+                    break
+                end
             end
-        end)
+            if success then break end
+        end
         
         if debugMode then
-            print("[Islands Dupe] Fired dupe remote with args: " .. tool.Name .. ", 1")
+            print("[Islands Dupe] Tried " .. triedArgs .. " arg combinations across remotes.")
         end
         
         if success then
             successCount = successCount + 1
             wait(delayTime)
+        else
+            cloneTool:Destroy()  -- Remove local if server fails
+            break
         end
     end
     
@@ -301,17 +365,13 @@ local function duplicateItem()
             print("[Islands Dupe] Fired save remote after dupes")
         end
     end
-        else
-            cloneTool:Destroy()  -- Remove local if server fails
-            break
-        end
-    end
     
     updateStatus("Duplicated " .. successCount .. "/" .. amount .. " items legitimately.")
     duplicating = false
 end
 
 -- Events
+debugButton.MouseButton1Click:Connect(toggleDebug)
 dupeButton.MouseButton1Click:Connect(duplicateItem)
 scanButton.MouseButton1Click:Connect(scanRemotes)
 
