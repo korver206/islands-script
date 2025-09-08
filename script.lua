@@ -451,14 +451,28 @@ local function scanRemotes()
         table.insert(areas, player.PlayerGui)
     end
 
+    local scannedCount = 0
+    local scanLimit = 1000
+
     for _, area in ipairs(areas) do
         pcall(function()
-            for _, child in ipairs(area:GetDescendants()) do
+            local descendants = area:GetDescendants()
+            for i, child in ipairs(descendants) do
+                scannedCount = scannedCount + 1
+                if scannedCount > scanLimit then
+                    break
+                end
+                if i % 100 == 0 then
+                    task.wait(0.01)
+                end
                 if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
                     table.insert(allRemotes, child)
                 end
             end
         end)
+        if scannedCount > scanLimit then
+            break
+        end
     end
 
     if #allRemotes > 0 then
@@ -472,12 +486,13 @@ local function scanItems()
     updateStatus("Scanning items...")
     allItems = {}
 
-    local areas = {ReplicatedStorage, workspace, game:GetService("StarterPack")}
+    local areas = {ReplicatedStorage, game:GetService("StarterPack")}
     if player:FindFirstChild("Backpack") then
         table.insert(areas, player.Backpack)
     end
     local foundItems = {}
     local scannedCount = 0
+    local scanLimit = 2000
     local toolsFound = 0
     local modelsFound = 0
 
@@ -485,71 +500,80 @@ local function scanItems()
 
     for _, area in ipairs(areas) do
         print("[Islands Dupe] Scanning " .. area.Name)
-        local descendants = area:GetDescendants()
-        for i, child in ipairs(descendants) do
-            scannedCount = scannedCount + 1
+        pcall(function()
+            local descendants = area:GetDescendants()
+            for i, child in ipairs(descendants) do
+                scannedCount = scannedCount + 1
+                if scannedCount > scanLimit then
+                    print("[Islands Dupe] Scan limit reached at " .. scannedCount)
+                    break
+                end
 
-            if scannedCount % 50 == 0 then
-                task.wait(0.01)
-                updateStatus("Scanned " .. scannedCount .. " objects...")
-            end
+                if scannedCount % 50 == 0 then
+                    task.wait(0.01)
+                    updateStatus("Scanned " .. scannedCount .. " objects...")
+                end
 
-            local isValidItem = false
-            local itemType = ""
+                local isValidItem = false
+                local itemType = ""
 
-            if child:IsA("Tool") then
-                isValidItem = true
-                itemType = "Tool"
-                toolsFound = toolsFound + 1
-            elseif child:IsA("Model") and child:FindFirstChild("Handle") then
-                isValidItem = true
-                itemType = "Model"
-                modelsFound = modelsFound + 1
-            end
-
-            if isValidItem then
-                local itemName = child.Name
-                local iconId = ""
-                local category = categorizeItem(itemName)
-
-                -- Enhanced icon detection
                 if child:IsA("Tool") then
-                    if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") and child.IconId.Value ~= "" then
-                        iconId = "rbxassetid://" .. child.IconId.Value
-                    elseif child.TextureId and child.TextureId ~= "" then
-                        iconId = child.TextureId
-                    elseif child:FindFirstChild("Icon") and child.Icon:IsA("ImageLabel") and child.Icon.Image ~= "" then
-                        iconId = child.Icon.Image
-                    end
-                elseif child:IsA("Model") then
-                    local handle = child:FindFirstChild("Handle")
-                    if handle then
-                        if handle.TextureId and handle.TextureId ~= "" then
-                            iconId = handle.TextureId
-                        elseif handle:FindFirstChildOfClass("Decal") then
-                            iconId = handle.Decal.Texture
-                        elseif handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
-                            iconId = handle.Icon.Image
+                    isValidItem = true
+                    itemType = "Tool"
+                    toolsFound = toolsFound + 1
+                elseif child:IsA("Model") and child:FindFirstChild("Handle") then
+                    isValidItem = true
+                    itemType = "Model"
+                    modelsFound = modelsFound + 1
+                end
+
+                if isValidItem then
+                    local itemName = child.Name
+                    local iconId = ""
+                    local category = categorizeItem(itemName)
+
+                    -- Enhanced icon detection
+                    if child:IsA("Tool") then
+                        if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") and child.IconId.Value ~= "" then
+                            iconId = "rbxassetid://" .. child.IconId.Value
+                        elseif child.TextureId and child.TextureId ~= "" then
+                            iconId = child.TextureId
+                        elseif child:FindFirstChild("Icon") and child.Icon:IsA("ImageLabel") and child.Icon.Image ~= "" then
+                            iconId = child.Icon.Image
+                        end
+                    elseif child:IsA("Model") then
+                        local handle = child:FindFirstChild("Handle")
+                        if handle then
+                            if handle.TextureId and handle.TextureId ~= "" then
+                                iconId = handle.TextureId
+                            elseif handle:FindFirstChildOfClass("Decal") then
+                                iconId = handle.Decal.Texture
+                            elseif handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
+                                iconId = handle.Icon.Image
+                            end
                         end
                     end
+
+                    if iconId == "" then
+                        iconId = "rbxassetid://0"
+                    end
+
+                    -- Always add the item, even if duplicate names (some games have multiple versions)
+                    local itemData = {
+                        name = itemName,
+                        icon = iconId,
+                        type = itemType,
+                        object = child,
+                        category = category
+                    }
+
+                    table.insert(foundItems, itemData)
+                    print("[Islands Dupe] Found " .. itemType .. ": " .. itemName .. " -> " .. category)
                 end
-
-                if iconId == "" then
-                    iconId = "rbxassetid://0"
-                end
-
-                -- Always add the item, even if duplicate names (some games have multiple versions)
-                local itemData = {
-                    name = itemName,
-                    icon = iconId,
-                    type = itemType,
-                    object = child,
-                    category = category
-                }
-
-                table.insert(foundItems, itemData)
-                print("[Islands Dupe] Found " .. itemType .. ": " .. itemName .. " -> " .. category)
             end
+        end)
+        if scannedCount > scanLimit then
+            break
         end
     end
 
