@@ -14,6 +14,8 @@ local duplicating = false
 local maxAmount = 5
 local delayTime = 2
 local allRemotes = {}
+local itemBrowserEnabled = false
+local allItems = {}
 
 -- UI Creation
 local screenGui = Instance.new("ScreenGui")
@@ -103,6 +105,49 @@ consoleTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 consoleTitle.TextScaled = true
 consoleTitle.Font = Enum.Font.GothamBold
 consoleTitle.Parent = consoleFrame
+
+-- Item Browser UI
+local itemBrowserFrame = Instance.new("Frame")
+itemBrowserFrame.Size = UDim2.new(0, 400, 0, 500)
+itemBrowserFrame.Position = UDim2.new(0, 320, 1, -510)
+itemBrowserFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+itemBrowserFrame.BackgroundTransparency = 0.2
+itemBrowserFrame.BorderSizePixel = 0
+itemBrowserFrame.Parent = screenGui
+itemBrowserFrame.Visible = itemBrowserEnabled
+
+local browserCorner = Instance.new("UICorner")
+browserCorner.CornerRadius = UDim.new(0, 10)
+browserCorner.Parent = itemBrowserFrame
+
+local browserTitle = Instance.new("TextLabel")
+browserTitle.Size = UDim2.new(1, 0, 0, 30)
+browserTitle.BackgroundTransparency = 1
+browserTitle.Text = "Item Browser"
+browserTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+browserTitle.TextScaled = true
+browserTitle.Font = Enum.Font.GothamBold
+browserTitle.Parent = itemBrowserFrame
+
+local itemGrid = Instance.new("ScrollingFrame")
+itemGrid.Size = UDim2.new(0.95, 0, 0, 430)
+itemGrid.Position = UDim2.new(0.025, 0, 0, 40)
+itemGrid.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+itemGrid.BackgroundTransparency = 0.1
+itemGrid.BorderSizePixel = 2
+itemGrid.BorderColor3 = Color3.fromRGB(255, 100, 255)
+itemGrid.ScrollBarThickness = 8
+itemGrid.Parent = itemBrowserFrame
+
+local gridCorner = Instance.new("UICorner")
+gridCorner.CornerRadius = UDim.new(0, 5)
+gridCorner.Parent = itemGrid
+
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0, 60, 0, 60)
+gridLayout.CellPadding = UDim2.new(0, 5, 0, 5)
+gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+gridLayout.Parent = itemGrid
 
 -- Functions
 local function updateStatus(text)
@@ -202,6 +247,131 @@ local function scanRemotes()
     else
         updateStatus("No remotes found.")
     end
+end
+
+local function scanItems()
+    updateStatus("Scanning for all game items...")
+    allItems = {}
+
+    -- Clear existing items
+    for _, child in ipairs(itemGrid:GetChildren()) do
+        if child:IsA("ImageButton") or child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local areas = {ReplicatedStorage, workspace}
+    local itemCount = 0
+
+    for _, area in ipairs(areas) do
+        for _, child in ipairs(area:GetDescendants()) do
+            if child:IsA("Tool") or (child:IsA("Model") and child:FindFirstChild("Handle")) then
+                local itemName = child.Name
+                local iconId = ""
+
+                -- Try to find icon in various places
+                if child:IsA("Tool") then
+                    iconId = child.TextureId or ""
+                    if child:FindFirstChild("Icon") then
+                        iconId = child.Icon.Image or iconId
+                    end
+                elseif child:IsA("Model") then
+                    local handle = child:FindFirstChild("Handle")
+                    if handle then
+                        iconId = handle.TextureId or ""
+                        if handle:FindFirstChild("Icon") then
+                            iconId = handle.Icon.Image or iconId
+                        end
+                    end
+                end
+
+                -- Create item button
+                local itemButton = Instance.new("ImageButton")
+                itemButton.Size = UDim2.new(0, 50, 0, 50)
+                itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+                itemButton.BackgroundTransparency = 0.3
+                itemButton.BorderSizePixel = 1
+                itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
+                itemButton.Image = iconId ~= "" and iconId or ""
+                itemButton.LayoutOrder = itemCount
+                itemButton.Parent = itemGrid
+
+                local buttonCorner = Instance.new("UICorner")
+                buttonCorner.CornerRadius = UDim.new(0, 5)
+                buttonCorner.Parent = itemButton
+
+                -- Add tooltip with item name
+                local tooltip = Instance.new("TextLabel")
+                tooltip.Size = UDim2.new(0, 100, 0, 20)
+                tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                tooltip.BackgroundTransparency = 0.5
+                tooltip.Text = itemName
+                tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tooltip.TextScaled = true
+                tooltip.Font = Enum.Font.Gotham
+                tooltip.Visible = false
+                tooltip.ZIndex = 10
+                tooltip.Parent = itemButton
+
+                local tooltipCorner = Instance.new("UICorner")
+                tooltipCorner.CornerRadius = UDim.new(0, 3)
+                tooltipCorner.Parent = tooltip
+
+                -- Show/hide tooltip
+                itemButton.MouseEnter:Connect(function()
+                    tooltip.Visible = true
+                end)
+
+                itemButton.MouseLeave:Connect(function()
+                    tooltip.Visible = false
+                end)
+
+                -- Click to duplicate this item
+                itemButton.MouseButton1Click:Connect(function()
+                    updateStatus("Attempting to duplicate: " .. itemName)
+                    -- Try to duplicate this specific item
+                    if #allRemotes > 0 then
+                        task.spawn(function()
+                            for _, remote in ipairs(allRemotes) do
+                                local argSets = {
+                                    {itemName, 1},
+                                    {itemName, 1, player},
+                                    {player, itemName, 1},
+                                    {"add", itemName, 1},
+                                    {itemName, 1, "craft"}
+                                }
+
+                                for _, args in ipairs(argSets) do
+                                    local ok = pcall(function()
+                                        if remote:IsA("RemoteEvent") then
+                                            remote:FireServer(unpack(args))
+                                        else
+                                            remote:InvokeServer(unpack(args))
+                                        end
+                                    end)
+
+                                    if ok then
+                                        print("[Islands Dupe] Successfully fired remote for " .. itemName)
+                                        local saveRemote = findRemote({"save", "update"}, ReplicatedStorage)
+                                        saveData(saveRemote)
+                                        updateStatus("Duplicated: " .. itemName)
+                                        return
+                                    end
+                                end
+                            end
+                            updateStatus("Failed to duplicate: " .. itemName)
+                        end)
+                    end
+                end)
+
+                table.insert(allItems, {name = itemName, icon = iconId, button = itemButton})
+                itemCount = itemCount + 1
+            end
+        end
+    end
+
+    itemGrid.CanvasSize = UDim2.new(0, 0, 0, math.ceil(itemCount / 6) * 65)
+    updateStatus("Found " .. itemCount .. " items in the game.")
 end
 
 local function saveData(remote)
@@ -332,17 +502,27 @@ dupeButton.MouseButton1Click:Connect(duplicateItem)
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.G then
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-            -- Stop
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
+            -- Stop script
             screenGui:Destroy()
             updateStatus("Script stopped.")
+            print("[Islands Dupe] Script stopped with Shift+G")
         else
-            -- Toggle
+            -- Toggle main UI
             enabled = not enabled
             mainFrame.Visible = enabled
+            updateStatus(enabled and "Main UI enabled" or "Main UI disabled")
         end
+    elseif input.KeyCode == Enum.KeyCode.H then
+        -- Toggle item browser UI
+        itemBrowserEnabled = not itemBrowserEnabled
+        itemBrowserFrame.Visible = itemBrowserEnabled
+        if itemBrowserEnabled then
+            scanItems()
+        end
+        updateStatus(itemBrowserEnabled and "Item Browser enabled (H to toggle)" or "Item Browser disabled")
     end
 end)
 
-updateStatus("Script loaded. Press G to toggle.")
-print("[Islands Dupe] Simplified script loaded.")
+updateStatus("Script loaded. G: toggle main UI, Shift+G: stop script, H: toggle item browser")
+print("[Islands Dupe] Simplified script loaded with item browser (H key)")
