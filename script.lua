@@ -243,6 +243,8 @@ local function createTabs()
 end
 
 local function displayItemsForTab()
+    print("[Islands Dupe] Displaying items for tab: " .. currentTab)
+
     -- Clear existing items
     for _, child in ipairs(itemGrid:GetChildren()) do
         if child:IsA("ImageButton") or child:IsA("TextButton") then
@@ -254,12 +256,14 @@ local function displayItemsForTab()
 
     if currentTab == "All" then
         itemsToShow = allItems
+        print("[Islands Dupe] Showing all " .. #allItems .. " items")
     else
         for _, item in ipairs(allItems) do
             if item.category == currentTab then
                 table.insert(itemsToShow, item)
             end
         end
+        print("[Islands Dupe] Showing " .. #itemsToShow .. " items in category: " .. currentTab)
     end
 
     -- Sort alphabetically
@@ -269,7 +273,7 @@ local function displayItemsForTab()
 
     -- Create item buttons in batches
     local itemCount = 0
-    local batchSize = 15
+    local batchSize = 20  -- Increased batch size
 
     for batchStart = 1, #itemsToShow, batchSize do
         local batchEnd = math.min(batchStart + batchSize - 1, #itemsToShow)
@@ -307,12 +311,12 @@ local function displayItemsForTab()
                 nameLabel.Parent = itemButton
             end
 
-            -- Simple tooltip
+            -- Enhanced tooltip with category
             local tooltip = Instance.new("TextLabel")
-            tooltip.Size = UDim2.new(0, 120, 0, 20)
+            tooltip.Size = UDim2.new(0, 140, 0, 25)
             tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
             tooltip.BackgroundTransparency = 0.5
-            tooltip.Text = itemData.name
+            tooltip.Text = itemData.name .. "\n[" .. itemData.category .. "]"
             tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
             tooltip.TextScaled = true
             tooltip.Font = Enum.Font.Gotham
@@ -340,6 +344,7 @@ local function displayItemsForTab()
                         local clonedItem = itemData.object:Clone()
                         clonedItem.Parent = backpack
                         updateStatus("Added: " .. itemData.name)
+                        print("[Islands Dupe] Successfully added " .. itemData.name .. " to backpack")
                     end)
                 else
                     updateStatus("Item already exists or no backpack")
@@ -351,7 +356,7 @@ local function displayItemsForTab()
 
         -- Delay between batches
         if batchEnd < #itemsToShow then
-            task.wait(0.02)
+            task.wait(0.01)
         end
     end
 
@@ -361,6 +366,7 @@ local function displayItemsForTab()
     local rows = math.ceil(itemCount / itemsPerRow)
     itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)
 
+    print("[Islands Dupe] Display complete: " .. itemCount .. " items shown")
     updateStatus("Showing " .. itemCount .. " items in " .. currentTab)
 end
 
@@ -433,32 +439,52 @@ local function scanRemotes()
 end
 
 local function scanItems()
-    updateStatus("Scanning items (optimized)...")
+    updateStatus("Scanning items...")
     allItems = {}
 
     local areas = {ReplicatedStorage, workspace}
     local foundItems = {}
-    local scanLimit = 100
+    local scanLimit = 300  -- Increased limit
     local scannedCount = 0
+    local toolsFound = 0
+    local modelsFound = 0
+
+    print("[Islands Dupe] Starting item scan...")
 
     for _, area in ipairs(areas) do
+        print("[Islands Dupe] Scanning " .. area.Name)
         local descendants = area:GetDescendants()
         for i, child in ipairs(descendants) do
             scannedCount = scannedCount + 1
             if scannedCount > scanLimit then
+                print("[Islands Dupe] Scan limit reached at " .. scannedCount)
                 break
             end
 
-            if scannedCount % 25 == 0 then
+            if scannedCount % 50 == 0 then
                 task.wait(0.01)
+                updateStatus("Scanned " .. scannedCount .. " objects...")
             end
 
-            if child:IsA("Tool") or (child:IsA("Model") and child:FindFirstChild("Handle")) then
+            local isValidItem = false
+            local itemType = ""
+
+            if child:IsA("Tool") then
+                isValidItem = true
+                itemType = "Tool"
+                toolsFound = toolsFound + 1
+            elseif child:IsA("Model") and child:FindFirstChild("Handle") then
+                isValidItem = true
+                itemType = "Model"
+                modelsFound = modelsFound + 1
+            end
+
+            if isValidItem then
                 local itemName = child.Name
                 local iconId = ""
-                local itemType = child:IsA("Tool") and "Tool" or "Model"
+                local category = categorizeItem(itemName)
 
-                -- Simplified icon detection
+                -- Enhanced icon detection
                 if child:IsA("Tool") then
                     if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") and child.IconId.Value ~= "" then
                         iconId = "rbxassetid://" .. child.IconId.Value
@@ -474,6 +500,8 @@ local function scanItems()
                             iconId = handle.TextureId
                         elseif handle:FindFirstChildOfClass("Decal") then
                             iconId = handle.Decal.Texture
+                        elseif handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
+                            iconId = handle.Icon.Image
                         end
                     end
                 end
@@ -482,15 +510,17 @@ local function scanItems()
                     iconId = "rbxassetid://0"
                 end
 
-                if not foundItems[itemName] then
-                    foundItems[itemName] = {
-                        name = itemName,
-                        icon = iconId,
-                        type = itemType,
-                        object = child,
-                        category = categorizeItem(itemName)
-                    }
-                end
+                -- Always add the item, even if duplicate names (some games have multiple versions)
+                local itemData = {
+                    name = itemName,
+                    icon = iconId,
+                    type = itemType,
+                    object = child,
+                    category = category
+                }
+
+                table.insert(foundItems, itemData)
+                print("[Islands Dupe] Found " .. itemType .. ": " .. itemName .. " -> " .. category)
             end
         end
         if scannedCount > scanLimit then
@@ -498,12 +528,11 @@ local function scanItems()
         end
     end
 
-    -- Convert to array
-    for name, data in pairs(foundItems) do
-        table.insert(allItems, data)
-    end
+    -- Set allItems directly from foundItems
+    allItems = foundItems
 
-    updateStatus("Found " .. #allItems .. " items.")
+    print("[Islands Dupe] Scan complete: " .. toolsFound .. " tools, " .. modelsFound .. " models")
+    updateStatus("Found " .. #allItems .. " items (" .. toolsFound .. " tools, " .. modelsFound .. " models)")
 end
 
 -- Events
