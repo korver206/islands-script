@@ -273,6 +273,22 @@ if scriptContext then
     end)
 end
 
+-- Hook into TestService for warnings and info
+local testService = game:GetService("TestService")
+if testService then
+    testService.MessageOut:Connect(function(message, messageType)
+        addConsoleMessage("[TEST] " .. message, messageType)
+    end)
+end
+
+-- Hook into RunService for heartbeat messages
+local runService = game:GetService("RunService")
+if runService then
+    runService.Heartbeat:Connect(function()
+        -- This will help capture timing-related messages
+    end)
+end
+
 local function clearConsole()
     for _, child in ipairs(consoleFrame:GetChildren()) do
         if child:IsA("TextLabel") and child ~= consoleTitle then
@@ -419,7 +435,13 @@ local function duplicateItem()
     end
 
     -- Check if item already exists in backpack or hotbar (to avoid multiple instances)
-    local existingTool = backpack:FindFirstChild(tool.Name) or character:FindFirstChild(tool.Name)
+    local existingTool = nil
+    if backpack then
+        existingTool = backpack:FindFirstChild(tool.Name)
+    end
+    if not existingTool and character then
+        existingTool = character:FindFirstChild(tool.Name)
+    end
     if existingTool then
         updateStatus("Item already exists in inventory/hotbar. Cannot duplicate to avoid anti-cheat.")
         duplicating = false
