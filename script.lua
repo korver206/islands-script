@@ -1,6 +1,6 @@
--- Optimized Roblox Islands Duplication Script
+-- Tabbed Roblox Islands Duplication Script
 -- Compatible with Vega X Executor
--- Prevents freezing with limits and batch processing
+-- Organized item browser with categories
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +12,17 @@ local enabled = true
 local itemBrowserEnabled = false
 local allRemotes = {}
 local allItems = {}
+local currentTab = "All"
+local categories = {
+    "All",
+    "Tools",
+    "Materials",
+    "Food",
+    "Blocks",
+    "Weapons",
+    "Armor",
+    "Other"
+}
 
 -- UI Creation
 local screenGui = Instance.new("ScreenGui")
@@ -79,10 +90,10 @@ consoleTitle.TextScaled = true
 consoleTitle.Font = Enum.Font.GothamBold
 consoleTitle.Parent = consoleFrame
 
--- Item Browser UI
+-- Item Browser UI with Tabs
 local itemBrowserFrame = Instance.new("Frame")
-itemBrowserFrame.Size = UDim2.new(0, 400, 0, 500)
-itemBrowserFrame.Position = UDim2.new(0, 320, 1, -510)
+itemBrowserFrame.Size = UDim2.new(0, 500, 0, 550)
+itemBrowserFrame.Position = UDim2.new(0, 320, 1, -560)
 itemBrowserFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 itemBrowserFrame.BackgroundTransparency = 0.2
 itemBrowserFrame.BorderSizePixel = 0
@@ -96,15 +107,29 @@ browserCorner.Parent = itemBrowserFrame
 local browserTitle = Instance.new("TextLabel")
 browserTitle.Size = UDim2.new(1, 0, 0, 30)
 browserTitle.BackgroundTransparency = 1
-browserTitle.Text = "Item Browser"
+browserTitle.Text = "Item Browser - " .. currentTab
 browserTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 browserTitle.TextScaled = true
 browserTitle.Font = Enum.Font.GothamBold
 browserTitle.Parent = itemBrowserFrame
 
+-- Tab Container
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(0.95, 0, 0, 40)
+tabContainer.Position = UDim2.new(0.025, 0, 0, 35)
+tabContainer.BackgroundTransparency = 1
+tabContainer.Parent = itemBrowserFrame
+
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabLayout.Parent = tabContainer
+
+-- Item Grid
 local itemGrid = Instance.new("ScrollingFrame")
-itemGrid.Size = UDim2.new(0.95, 0, 0, 430)
-itemGrid.Position = UDim2.new(0.025, 0, 0, 40)
+itemGrid.Size = UDim2.new(0.95, 0, 0, 450)
+itemGrid.Position = UDim2.new(0.025, 0, 0, 80)
 itemGrid.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 itemGrid.BackgroundTransparency = 0.1
 itemGrid.BorderSizePixel = 2
@@ -126,6 +151,217 @@ gridLayout.Parent = itemGrid
 local function updateStatus(text)
     statusLabel.Text = "Status: " .. text
     print("[Islands Dupe] " .. text)
+end
+
+local function categorizeItem(itemName)
+    itemName = itemName:lower()
+
+    -- Tools category
+    if itemName:find("pickaxe") or itemName:find("axe") or itemName:find("shovel") or
+       itemName:find("hammer") or itemName:find("sword") or itemName:find("bow") or
+       itemName:find("fishing") or itemName:find("rod") then
+        return "Tools"
+    end
+
+    -- Materials category
+    if itemName:find("wood") or itemName:find("stone") or itemName:find("iron") or
+       itemName:find("gold") or itemName:find("diamond") or itemName:find("coal") or
+       itemName:find("ore") or itemName:find("ingot") then
+        return "Materials"
+    end
+
+    -- Food category
+    if itemName:find("apple") or itemName:find("bread") or itemName:find("fish") or
+       itemName:find("meat") or itemName:find("berry") or itemName:find("fruit") or
+       itemName:find("cake") or itemName:find("pie") then
+        return "Food"
+    end
+
+    -- Blocks category
+    if itemName:find("block") or itemName:find("brick") or itemName:find("plank") or
+       itemName:find("log") or itemName:find("stone") or itemName:find("dirt") or
+       itemName:find("sand") or itemName:find("glass") then
+        return "Blocks"
+    end
+
+    -- Weapons category
+    if itemName:find("sword") or itemName:find("bow") or itemName:find("arrow") or
+       itemName:find("shield") or itemName:find("dagger") or itemName:find("spear") then
+        return "Weapons"
+    end
+
+    -- Armor category
+    if itemName:find("helmet") or itemName:find("chestplate") or itemName:find("leggings") or
+       itemName:find("boots") or itemName:find("armor") or itemName:find("shield") then
+        return "Armor"
+    end
+
+    return "Other"
+end
+
+local function createTabs()
+    -- Clear existing tabs
+    for _, child in ipairs(tabContainer:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    for i, category in ipairs(categories) do
+        local tabButton = Instance.new("TextButton")
+        tabButton.Size = UDim2.new(0, 60, 0, 35)
+        tabButton.BackgroundColor3 = currentTab == category and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(40, 40, 40)
+        tabButton.BackgroundTransparency = 0.3
+        tabButton.BorderSizePixel = 1
+        tabButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
+        tabButton.Text = category:sub(1, 4)  -- Abbreviate
+        tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tabButton.TextScaled = true
+        tabButton.Font = Enum.Font.GothamBold
+        tabButton.LayoutOrder = i
+        tabButton.Parent = tabContainer
+
+        local tabCorner = Instance.new("UICorner")
+        tabCorner.CornerRadius = UDim.new(0, 5)
+        tabCorner.Parent = tabButton
+
+        if currentTab == category then
+            local tabTrim = Instance.new("UIStroke")
+            tabTrim.Color = Color3.fromRGB(255, 100, 255)
+            tabTrim.Thickness = 2
+            tabTrim.Parent = tabButton
+            shimmerEffect(tabTrim)
+        end
+
+        tabButton.MouseButton1Click:Connect(function()
+            currentTab = category
+            browserTitle.Text = "Item Browser - " .. currentTab
+            createTabs()  -- Refresh tabs
+            displayItemsForTab()
+        end)
+    end
+end
+
+local function displayItemsForTab()
+    -- Clear existing items
+    for _, child in ipairs(itemGrid:GetChildren()) do
+        if child:IsA("ImageButton") or child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local itemsToShow = {}
+
+    if currentTab == "All" then
+        itemsToShow = allItems
+    else
+        for _, item in ipairs(allItems) do
+            if item.category == currentTab then
+                table.insert(itemsToShow, item)
+            end
+        end
+    end
+
+    -- Sort alphabetically
+    table.sort(itemsToShow, function(a, b)
+        return a.name:lower() < b.name:lower()
+    end)
+
+    -- Create item buttons in batches
+    local itemCount = 0
+    local batchSize = 15
+
+    for batchStart = 1, #itemsToShow, batchSize do
+        local batchEnd = math.min(batchStart + batchSize - 1, #itemsToShow)
+
+        for i = batchStart, batchEnd do
+            local itemData = itemsToShow[i]
+
+            local itemButton = Instance.new("ImageButton")
+            itemButton.Size = UDim2.new(0, 50, 0, 50)
+            itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            itemButton.BackgroundTransparency = 0.3
+            itemButton.BorderSizePixel = 1
+            itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
+            itemButton.Image = itemData.icon
+            itemButton.LayoutOrder = itemCount
+            itemButton.Parent = itemGrid
+
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            buttonCorner.Parent = itemButton
+
+            -- If no icon, show text
+            if itemData.icon == "rbxassetid://0" then
+                itemButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+                itemButton.BackgroundTransparency = 0.1
+
+                local nameLabel = Instance.new("TextLabel")
+                nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+                nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Text = itemData.name:sub(1, 4)
+                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                nameLabel.TextScaled = true
+                nameLabel.Font = Enum.Font.GothamBold
+                nameLabel.Parent = itemButton
+            end
+
+            -- Simple tooltip
+            local tooltip = Instance.new("TextLabel")
+            tooltip.Size = UDim2.new(0, 120, 0, 20)
+            tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            tooltip.BackgroundTransparency = 0.5
+            tooltip.Text = itemData.name
+            tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tooltip.TextScaled = true
+            tooltip.Font = Enum.Font.Gotham
+            tooltip.Visible = false
+            tooltip.ZIndex = 10
+            tooltip.Parent = itemButton
+
+            local tooltipCorner = Instance.new("UICorner")
+            tooltipCorner.CornerRadius = UDim.new(0, 3)
+            tooltipCorner.Parent = tooltip
+
+            itemButton.MouseEnter:Connect(function()
+                tooltip.Visible = true
+            end)
+
+            itemButton.MouseLeave:Connect(function()
+                tooltip.Visible = false
+            end)
+
+            itemButton.MouseButton1Click:Connect(function()
+                updateStatus("Giving: " .. itemData.name)
+                local backpack = player:FindFirstChild("Backpack")
+                if backpack and not backpack:FindFirstChild(itemData.name) then
+                    pcall(function()
+                        local clonedItem = itemData.object:Clone()
+                        clonedItem.Parent = backpack
+                        updateStatus("Added: " .. itemData.name)
+                    end)
+                else
+                    updateStatus("Item already exists or no backpack")
+                end
+            end)
+
+            itemCount = itemCount + 1
+        end
+
+        -- Delay between batches
+        if batchEnd < #itemsToShow then
+            task.wait(0.02)
+        end
+    end
+
+    -- Calculate CanvasSize
+    local itemsPerRow = math.floor(itemGrid.AbsoluteSize.X / 65)
+    if itemsPerRow < 1 then itemsPerRow = 1 end
+    local rows = math.ceil(itemCount / itemsPerRow)
+    itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)
+
+    updateStatus("Showing " .. itemCount .. " items in " .. currentTab)
 end
 
 local function addConsoleMessage(message, messageType)
@@ -200,16 +436,9 @@ local function scanItems()
     updateStatus("Scanning items (optimized)...")
     allItems = {}
 
-    -- Clear existing items
-    for _, child in ipairs(itemGrid:GetChildren()) do
-        if child:IsA("ImageButton") or child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
-
     local areas = {ReplicatedStorage, workspace}
     local foundItems = {}
-    local scanLimit = 100  -- Reduced limit to prevent freezing
+    local scanLimit = 100
     local scannedCount = 0
 
     for _, area in ipairs(areas) do
@@ -221,7 +450,7 @@ local function scanItems()
             end
 
             if scannedCount % 25 == 0 then
-                task.wait(0.01)  -- Small delay to prevent freezing
+                task.wait(0.01)
             end
 
             if child:IsA("Tool") or (child:IsA("Model") and child:FindFirstChild("Handle")) then
@@ -258,7 +487,8 @@ local function scanItems()
                         name = itemName,
                         icon = iconId,
                         type = itemType,
-                        object = child
+                        object = child,
+                        category = categorizeItem(itemName)
                     }
                 end
             end
@@ -268,111 +498,12 @@ local function scanItems()
         end
     end
 
-    -- Sort items alphabetically
-    local sortedItems = {}
+    -- Convert to array
     for name, data in pairs(foundItems) do
-        table.insert(sortedItems, data)
-    end
-    table.sort(sortedItems, function(a, b)
-        return a.name:lower() < b.name:lower()
-    end)
-
-    -- Create buttons in batches
-    local itemCount = 0
-    local batchSize = 15  -- Smaller batches
-
-    for batchStart = 1, #sortedItems, batchSize do
-        local batchEnd = math.min(batchStart + batchSize - 1, #sortedItems)
-
-        for i = batchStart, batchEnd do
-            local itemData = sortedItems[i]
-
-            local itemButton = Instance.new("ImageButton")
-            itemButton.Size = UDim2.new(0, 50, 0, 50)
-            itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-            itemButton.BackgroundTransparency = 0.3
-            itemButton.BorderSizePixel = 1
-            itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
-            itemButton.Image = itemData.icon
-            itemButton.LayoutOrder = itemCount
-            itemButton.Parent = itemGrid
-
-            local buttonCorner = Instance.new("UICorner")
-            buttonCorner.CornerRadius = UDim.new(0, 5)
-            buttonCorner.Parent = itemButton
-
-            -- If no icon, show text
-            if itemData.icon == "rbxassetid://0" then
-                itemButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-                itemButton.BackgroundTransparency = 0.1
-
-                local nameLabel = Instance.new("TextLabel")
-                nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-                nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
-                nameLabel.BackgroundTransparency = 1
-                nameLabel.Text = itemData.name:sub(1, 4)
-                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                nameLabel.TextScaled = true
-                nameLabel.Font = Enum.Font.GothamBold
-                nameLabel.Parent = itemButton
-            end
-
-            -- Simple tooltip
-            local tooltip = Instance.new("TextLabel")
-            tooltip.Size = UDim2.new(0, 120, 0, 20)
-            tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-            tooltip.BackgroundTransparency = 0.5
-            tooltip.Text = itemData.name
-            tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
-            tooltip.TextScaled = true
-            tooltip.Font = Enum.Font.Gotham
-            tooltip.Visible = false
-            tooltip.ZIndex = 10
-            tooltip.Parent = itemButton
-
-            local tooltipCorner = Instance.new("UICorner")
-            tooltipCorner.CornerRadius = UDim.new(0, 3)
-            tooltipCorner.Parent = tooltip
-
-            itemButton.MouseEnter:Connect(function()
-                tooltip.Visible = true
-            end)
-
-            itemButton.MouseLeave:Connect(function()
-                tooltip.Visible = false
-            end)
-
-            itemButton.MouseButton1Click:Connect(function()
-                updateStatus("Giving: " .. itemData.name)
-                local backpack = player:FindFirstChild("Backpack")
-                if backpack and not backpack:FindFirstChild(itemData.name) then
-                    pcall(function()
-                        local clonedItem = itemData.object:Clone()
-                        clonedItem.Parent = backpack
-                        updateStatus("Added: " .. itemData.name)
-                    end)
-                else
-                    updateStatus("Item already exists or no backpack")
-                end
-            end)
-
-            table.insert(allItems, itemData)
-            itemCount = itemCount + 1
-        end
-
-        -- Delay between batches
-        if batchEnd < #sortedItems then
-            task.wait(0.02)
-        end
+        table.insert(allItems, data)
     end
 
-    -- Calculate CanvasSize
-    local itemsPerRow = math.floor(itemGrid.AbsoluteSize.X / 65)
-    if itemsPerRow < 1 then itemsPerRow = 1 end
-    local rows = math.ceil(itemCount / itemsPerRow)
-    itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)
-
-    updateStatus("Found " .. itemCount .. " items.")
+    updateStatus("Found " .. #allItems .. " items.")
 end
 
 -- Events
@@ -394,10 +525,13 @@ UserInputService.InputBegan:Connect(function(input, processed)
             scanRemotes()
             task.wait(0.5)
             scanItems()
+            task.wait(0.5)
+            createTabs()
+            displayItemsForTab()
         end
         updateStatus(itemBrowserEnabled and "Item Browser enabled" or "Item Browser disabled")
     end
 end)
 
 updateStatus("Script loaded. G: toggle main UI, Shift+G: stop, H: item browser")
-print("[Islands Dupe] Optimized script loaded")
+print("[Islands Dupe] Tabbed script loaded")
