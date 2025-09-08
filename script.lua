@@ -261,117 +261,192 @@ local function scanItems()
     end
 
     local areas = {ReplicatedStorage, workspace}
-    local itemCount = 0
+    local foundItems = {}
 
     for _, area in ipairs(areas) do
         for _, child in ipairs(area:GetDescendants()) do
             if child:IsA("Tool") or (child:IsA("Model") and child:FindFirstChild("Handle")) then
                 local itemName = child.Name
                 local iconId = ""
+                local itemType = child:IsA("Tool") and "Tool" or "Model"
 
                 -- Try to find icon in various places
                 if child:IsA("Tool") then
-                    iconId = child.TextureId or ""
-                    if child:FindFirstChild("Icon") then
-                        iconId = child.Icon.Image or iconId
+                    -- Check for TextureId first
+                    if child.TextureId and child.TextureId ~= "" then
+                        iconId = "rbxassetid://" .. child.TextureId:gsub("rbxassetid://", "")
+                    end
+
+                    -- Check for Icon child
+                    if child:FindFirstChild("Icon") and child.Icon:IsA("ImageLabel") then
+                        iconId = child.Icon.Image
+                    end
+
+                    -- Check for IconId property
+                    if child:FindFirstChild("IconId") then
+                        iconId = "rbxassetid://" .. tostring(child.IconId)
                     end
                 elseif child:IsA("Model") then
                     local handle = child:FindFirstChild("Handle")
                     if handle then
-                        iconId = handle.TextureId or ""
-                        if handle:FindFirstChild("Icon") then
-                            iconId = handle.Icon.Image or iconId
+                        if handle.TextureId and handle.TextureId ~= "" then
+                            iconId = "rbxassetid://" .. handle.TextureId:gsub("rbxassetid://", "")
+                        end
+
+                        if handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
+                            iconId = handle.Icon.Image
                         end
                     end
                 end
 
-                -- Create item button
-                local itemButton = Instance.new("ImageButton")
-                itemButton.Size = UDim2.new(0, 50, 0, 50)
-                itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-                itemButton.BackgroundTransparency = 0.3
-                itemButton.BorderSizePixel = 1
-                itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
-                itemButton.Image = iconId ~= "" and iconId or ""
-                itemButton.LayoutOrder = itemCount
-                itemButton.Parent = itemGrid
+                -- If no icon found, use a default placeholder
+                if iconId == "" then
+                    iconId = "rbxassetid://0"  -- Transparent placeholder
+                end
 
-                local buttonCorner = Instance.new("UICorner")
-                buttonCorner.CornerRadius = UDim.new(0, 5)
-                buttonCorner.Parent = itemButton
-
-                -- Add tooltip with item name
-                local tooltip = Instance.new("TextLabel")
-                tooltip.Size = UDim2.new(0, 100, 0, 20)
-                tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                tooltip.BackgroundTransparency = 0.5
-                tooltip.Text = itemName
-                tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
-                tooltip.TextScaled = true
-                tooltip.Font = Enum.Font.Gotham
-                tooltip.Visible = false
-                tooltip.ZIndex = 10
-                tooltip.Parent = itemButton
-
-                local tooltipCorner = Instance.new("UICorner")
-                tooltipCorner.CornerRadius = UDim.new(0, 3)
-                tooltipCorner.Parent = tooltip
-
-                -- Show/hide tooltip
-                itemButton.MouseEnter:Connect(function()
-                    tooltip.Visible = true
-                end)
-
-                itemButton.MouseLeave:Connect(function()
-                    tooltip.Visible = false
-                end)
-
-                -- Click to duplicate this item
-                itemButton.MouseButton1Click:Connect(function()
-                    updateStatus("Attempting to duplicate: " .. itemName)
-                    -- Try to duplicate this specific item
-                    if #allRemotes > 0 then
-                        task.spawn(function()
-                            for _, remote in ipairs(allRemotes) do
-                                local argSets = {
-                                    {itemName, 1},
-                                    {itemName, 1, player},
-                                    {player, itemName, 1},
-                                    {"add", itemName, 1},
-                                    {itemName, 1, "craft"}
-                                }
-
-                                for _, args in ipairs(argSets) do
-                                    local ok = pcall(function()
-                                        if remote:IsA("RemoteEvent") then
-                                            remote:FireServer(unpack(args))
-                                        else
-                                            remote:InvokeServer(unpack(args))
-                                        end
-                                    end)
-
-                                    if ok then
-                                        print("[Islands Dupe] Successfully fired remote for " .. itemName)
-                                        local saveRemote = findRemote({"save", "update"}, ReplicatedStorage)
-                                        saveData(saveRemote)
-                                        updateStatus("Duplicated: " .. itemName)
-                                        return
-                                    end
-                                end
-                            end
-                            updateStatus("Failed to duplicate: " .. itemName)
-                        end)
-                    end
-                end)
-
-                table.insert(allItems, {name = itemName, icon = iconId, button = itemButton})
-                itemCount = itemCount + 1
+                if not foundItems[itemName] then
+                    foundItems[itemName] = {
+                        name = itemName,
+                        icon = iconId,
+                        type = itemType,
+                        object = child
+                    }
+                end
             end
         end
     end
 
+    -- Sort items alphabetically
+    local sortedItems = {}
+    for name, data in pairs(foundItems) do
+        table.insert(sortedItems, data)
+    end
+    table.sort(sortedItems, function(a, b)
+        return a.name:lower() < b.name:lower()
+    end)
+
+    -- Create buttons for sorted items
+    local itemCount = 0
+    for _, itemData in ipairs(sortedItems) do
+        -- Create item button
+        local itemButton = Instance.new("ImageButton")
+        itemButton.Size = UDim2.new(0, 50, 0, 50)
+        itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        itemButton.BackgroundTransparency = 0.3
+        itemButton.BorderSizePixel = 1
+        itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
+        itemButton.Image = itemData.icon
+        itemButton.LayoutOrder = itemCount
+        itemButton.Parent = itemGrid
+
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.CornerRadius = UDim.new(0, 5)
+        buttonCorner.Parent = itemButton
+
+        -- Add item name as text overlay if no icon
+        if itemData.icon == "rbxassetid://0" then
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = itemData.name:sub(1, 3)  -- First 3 letters
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextScaled = true
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.Parent = itemButton
+        end
+
+        -- Add tooltip with full item name
+        local tooltip = Instance.new("TextLabel")
+        tooltip.Size = UDim2.new(0, 150, 0, 25)
+        tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        tooltip.BackgroundTransparency = 0.3
+        tooltip.Text = itemData.name .. " (" .. itemData.type .. ")"
+        tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tooltip.TextScaled = true
+        tooltip.Font = Enum.Font.Gotham
+        tooltip.Visible = false
+        tooltip.ZIndex = 10
+        tooltip.Parent = itemButton
+
+        local tooltipCorner = Instance.new("UICorner")
+        tooltipCorner.CornerRadius = UDim.new(0, 3)
+        tooltipCorner.Parent = tooltip
+
+        -- Show/hide tooltip
+        itemButton.MouseEnter:Connect(function()
+            tooltip.Visible = true
+        end)
+
+        itemButton.MouseLeave:Connect(function()
+            tooltip.Visible = false
+        end)
+
+        -- Click to get/give this item
+        itemButton.MouseButton1Click:Connect(function()
+            updateStatus("Attempting to give: " .. itemData.name)
+            -- Try to give this specific item
+            if #allRemotes > 0 then
+                task.spawn(function()
+                    local success = false
+
+                    -- First try to clone and add to backpack (works for items you don't have)
+                    local backpack = player:FindFirstChild("Backpack")
+                    if backpack and not backpack:FindFirstChild(itemData.name) then
+                        local clonedItem = itemData.object:Clone()
+                        clonedItem.Parent = backpack
+                        success = true
+                        print("[Islands Dupe] Added " .. itemData.name .. " to backpack")
+                    end
+
+                    -- Then try server-side methods for persistence
+                    for _, remote in ipairs(allRemotes) do
+                        local argSets = {
+                            {itemData.name, 1},
+                            {itemData.name, 1, player},
+                            {player, itemData.name, 1},
+                            {"give", itemData.name, 1},
+                            {"add", itemData.name, 1},
+                            {itemData.name, 1, "inventory"},
+                            {itemData.name, 1, "give"}
+                        }
+
+                        for _, args in ipairs(argSets) do
+                            local ok = pcall(function()
+                                if remote:IsA("RemoteEvent") then
+                                    remote:FireServer(unpack(args))
+                                else
+                                    remote:InvokeServer(unpack(args))
+                                end
+                            end)
+
+                            if ok then
+                                print("[Islands Dupe] Server confirmed " .. itemData.name)
+                                success = true
+                            end
+                        end
+                    end
+
+                    -- Save data for persistence
+                    local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
+                    saveData(saveRemote)
+
+                    if success then
+                        updateStatus("Gave: " .. itemData.name)
+                    else
+                        updateStatus("Failed to give: " .. itemData.name)
+                    end
+                end)
+            else
+                updateStatus("No remotes found. Run main dupe first.")
+            end
+        end)
+
+        table.insert(allItems, itemData)
+        itemCount = itemCount + 1
+    end
+
     itemGrid.CanvasSize = UDim2.new(0, 0, 0, math.ceil(itemCount / 6) * 65)
-    updateStatus("Found " .. itemCount .. " items in the game.")
+    updateStatus("Found " .. itemCount .. " items (sorted alphabetically).")
 end
 
 local function saveData(remote)
