@@ -1,20 +1,16 @@
--- Simplified Roblox Islands Duplication Script
+-- Optimized Roblox Islands Duplication Script
 -- Compatible with Vega X Executor
--- True duplication with persistence
+-- Prevents freezing with limits and batch processing
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local LogService = game:GetService("LogService")
 local player = Players.LocalPlayer
 
 local enabled = true
-local duplicating = false
-local maxAmount = 5
-local delayTime = 2
-local allRemotes = {}
 local itemBrowserEnabled = false
+local allRemotes = {}
 local allItems = {}
 
 -- UI Creation
@@ -154,40 +150,12 @@ local function addConsoleMessage(message, messageType)
     label.Parent = consoleFrame
     consoleFrame.CanvasSize = UDim2.new(0, 0, 0, consoleLayout.AbsoluteContentSize.Y)
 
-    -- Limit to last 50 messages
+    -- Limit to last 30 messages
     local children = consoleFrame:GetChildren()
-    if #children > 51 then
+    if #children > 32 then
         children[2]:Destroy()  -- Keep title
     end
 end
-
--- Override print to also show in UI
-local oldPrint = print
-print = function(...)
-    local args = {...}
-    local message = table.concat(args, " ")
-    addConsoleMessage("[PRINT] " .. message, Enum.MessageType.MessageOutput)
-    return oldPrint(...)
-end
-
-local oldWarn = warn
-warn = function(...)
-    local args = {...}
-    local message = table.concat(args, " ")
-    addConsoleMessage("[WARN] " .. message, Enum.MessageType.MessageWarning)
-    return oldWarn(...)
-end
-
-local oldError = error
-error = function(message, level)
-    addConsoleMessage("[ERROR] " .. tostring(message), Enum.MessageType.MessageError)
-    return oldError(message, level)
-end
-
--- Also capture LogService messages
-LogService.MessageOut:Connect(function(message, messageType)
-    addConsoleMessage("[LOG] " .. message, messageType)
-end)
 
 local function findRemote(names, parent)
     for _, child in ipairs(parent:GetDescendants()) do
@@ -203,32 +171,14 @@ local function findRemote(names, parent)
 end
 
 local function scanRemotes()
-    updateStatus("Scanning for duplication remotes...")
+    updateStatus("Scanning for remotes...")
     allRemotes = {}
 
-    -- Comprehensive list of areas to search
-    local areas = {
-        ReplicatedStorage,
-        workspace,
-        game:GetService("Lighting"),
-        game:GetService("SoundService"),
-        game:GetService("StarterGui"),
-        game:GetService("StarterPack"),
-        game:GetService("HttpService")
-    }
-
+    local areas = {ReplicatedStorage, workspace}
     if player.PlayerGui then
         table.insert(areas, player.PlayerGui)
     end
 
-    -- Add all services
-    for _, service in ipairs(game:GetChildren()) do
-        if service:IsA("Service") and not table.find(areas, service) then
-            table.insert(areas, service)
-        end
-    end
-
-    -- Search for remotes in all areas
     for _, area in ipairs(areas) do
         pcall(function()
             for _, child in ipairs(area:GetDescendants()) do
@@ -239,43 +189,15 @@ local function scanRemotes()
         end)
     end
 
-    -- Also search for remotes with specific names that might be obfuscated
-    local specificNames = {
-        "Remote", "Event", "Function", "Server", "Client",
-        "Inventory", "Item", "Give", "Add", "Remove", "Update",
-        "Craft", "Process", "Furnace", "Anvil", "Workbench",
-        "Storage", "Chest", "Container", "Backpack",
-        "Data", "Save", "Load", "Sync", "Network"
-    }
-
-    for _, area in ipairs(areas) do
-        pcall(function()
-            for _, child in ipairs(area:GetDescendants()) do
-                if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                    for _, name in ipairs(specificNames) do
-                        if string.find(child.Name:lower(), name:lower()) then
-                            if not table.find(allRemotes, child) then
-                                table.insert(allRemotes, child)
-                            end
-                            break
-                        end
-                    end
-                end
-            end
-        end)
-    end
-
     if #allRemotes > 0 then
-        updateStatus("Found " .. #allRemotes .. " remotes. Ready to give items.")
-        print("[Islands Dupe] Found remotes: " .. #allRemotes)
+        updateStatus("Found " .. #allRemotes .. " remotes.")
     else
-        updateStatus("No remotes found. Game may have updated.")
-        print("[Islands Dupe] No remotes found in any location")
+        updateStatus("No remotes found.")
     end
 end
 
 local function scanItems()
-    updateStatus("Scanning for all game items...")
+    updateStatus("Scanning items (optimized)...")
     allItems = {}
 
     -- Clear existing items
@@ -287,115 +209,48 @@ local function scanItems()
 
     local areas = {ReplicatedStorage, workspace}
     local foundItems = {}
+    local scanLimit = 100  -- Reduced limit to prevent freezing
+    local scannedCount = 0
 
     for _, area in ipairs(areas) do
-        for _, child in ipairs(area:GetDescendants()) do
+        local descendants = area:GetDescendants()
+        for i, child in ipairs(descendants) do
+            scannedCount = scannedCount + 1
+            if scannedCount > scanLimit then
+                break
+            end
+
+            if scannedCount % 25 == 0 then
+                task.wait(0.01)  -- Small delay to prevent freezing
+            end
+
             if child:IsA("Tool") or (child:IsA("Model") and child:FindFirstChild("Handle")) then
                 local itemName = child.Name
                 local iconId = ""
                 local itemType = child:IsA("Tool") and "Tool" or "Model"
 
-                -- Try to find icon in various places (improved for Roblox Islands)
+                -- Simplified icon detection
                 if child:IsA("Tool") then
-                    -- Check for IconId first (common in Islands)
-                    if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") then
+                    if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") and child.IconId.Value ~= "" then
                         iconId = "rbxassetid://" .. child.IconId.Value
-                    elseif child:FindFirstChild("IconId") and type(child.IconId) == "string" then
-                        iconId = "rbxassetid://" .. child.IconId
-                    end
-
-                    -- Check for Icon child
-                    if child:FindFirstChild("Icon") and child.Icon:IsA("ImageLabel") then
-                        iconId = child.Icon.Image
-                    end
-
-                    -- Check for TextureId
-                    if child.TextureId and child.TextureId ~= "" then
+                    elseif child.TextureId and child.TextureId ~= "" then
                         iconId = child.TextureId
-                    end
-
-                    -- Check for Decal in Handle
-                    if child:FindFirstChild("Handle") and child.Handle:FindFirstChildOfClass("Decal") then
-                        iconId = child.Handle.Decal.Texture
-                    end
-
-                    -- Check for Icon in Handle
-                    if child:FindFirstChild("Handle") and child.Handle:FindFirstChild("Icon") then
-                        local handleIcon = child.Handle.Icon
-                        if handleIcon:IsA("ImageLabel") then
-                            iconId = handleIcon.Image
-                        elseif handleIcon:IsA("Decal") then
-                            iconId = handleIcon.Texture
-                        end
+                    elseif child:FindFirstChild("Icon") and child.Icon:IsA("ImageLabel") and child.Icon.Image ~= "" then
+                        iconId = child.Icon.Image
                     end
                 elseif child:IsA("Model") then
                     local handle = child:FindFirstChild("Handle")
                     if handle then
-                        -- Check for IconId in model
-                        if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") then
-                            iconId = "rbxassetid://" .. child.IconId.Value
-                        elseif child:FindFirstChild("IconId") and type(child.IconId) == "string" then
-                            iconId = "rbxassetid://" .. child.IconId
-                        end
-
-                        -- Check for Icon in handle
-                        if handle:FindFirstChild("Icon") then
-                            local handleIcon = handle.Icon
-                            if handleIcon:IsA("ImageLabel") then
-                                iconId = handleIcon.Image
-                            elseif handleIcon:IsA("Decal") then
-                                iconId = handleIcon.Texture
-                            end
-                        end
-
-                        -- Check for TextureId
                         if handle.TextureId and handle.TextureId ~= "" then
                             iconId = handle.TextureId
-                        end
-
-                        -- Check for Decal in Handle
-                        if handle:FindFirstChildOfClass("Decal") then
+                        elseif handle:FindFirstChildOfClass("Decal") then
                             iconId = handle.Decal.Texture
                         end
                     end
                 end
 
-                -- Search for icon in ReplicatedStorage (common location for Islands icons)
                 if iconId == "" then
-                    pcall(function()
-                        for _, item in ipairs(ReplicatedStorage:GetDescendants()) do
-                            if item.Name == child.Name .. "Icon" or item.Name == child.Name .. "_Icon" then
-                                if item:IsA("StringValue") and item.Value ~= "" then
-                                    iconId = "rbxassetid://" .. item.Value
-                                    break
-                                elseif item:IsA("ImageLabel") and item.Image ~= "" then
-                                    iconId = item.Image
-                                    break
-                                end
-                            end
-                        end
-                    end)
-                end
-
-                -- If no icon found, try to find any image in the object
-                if iconId == "" then
-                    for _, descendant in ipairs(child:GetDescendants()) do
-                        if descendant:IsA("ImageLabel") and descendant.Image and descendant.Image ~= "" then
-                            iconId = descendant.Image
-                            break
-                        elseif descendant:IsA("Decal") and descendant.Texture and descendant.Texture ~= "" then
-                            iconId = descendant.Texture
-                            break
-                        elseif descendant:IsA("StringValue") and descendant.Name:lower():find("icon") and descendant.Value ~= "" then
-                            iconId = "rbxassetid://" .. descendant.Value
-                            break
-                        end
-                    end
-                end
-
-                -- If still no icon found, use a default placeholder
-                if iconId == "" then
-                    iconId = "rbxassetid://0"  -- Transparent placeholder
+                    iconId = "rbxassetid://0"
                 end
 
                 if not foundItems[itemName] then
@@ -408,6 +263,9 @@ local function scanItems()
                 end
             end
         end
+        if scannedCount > scanLimit then
+            break
+        end
     end
 
     -- Sort items alphabetically
@@ -419,208 +277,127 @@ local function scanItems()
         return a.name:lower() < b.name:lower()
     end)
 
-    -- Create buttons for sorted items
+    -- Create buttons in batches
     local itemCount = 0
-    for _, itemData in ipairs(sortedItems) do
-        -- Create item button
-        local itemButton = Instance.new("ImageButton")
-        itemButton.Size = UDim2.new(0, 50, 0, 50)
-        itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-        itemButton.BackgroundTransparency = 0.3
-        itemButton.BorderSizePixel = 1
-        itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
-        itemButton.Image = itemData.icon
-        itemButton.LayoutOrder = itemCount
-        itemButton.Parent = itemGrid
+    local batchSize = 15  -- Smaller batches
 
-        local buttonCorner = Instance.new("UICorner")
-        buttonCorner.CornerRadius = UDim.new(0, 5)
-        buttonCorner.Parent = itemButton
+    for batchStart = 1, #sortedItems, batchSize do
+        local batchEnd = math.min(batchStart + batchSize - 1, #sortedItems)
 
-        -- If no icon found, try to use the item's appearance or create a simple visual
-        if itemData.icon == "rbxassetid://0" then
-            -- Try to get the item's color or create a colored background
-            local itemColor = Color3.fromRGB(150, 150, 150)  -- Default gray
+        for i = batchStart, batchEnd do
+            local itemData = sortedItems[i]
 
-            if child:IsA("Tool") and child:FindFirstChild("Handle") then
-                local handle = child.Handle
-                if handle:IsA("Part") and handle.BrickColor then
-                    itemColor = handle.BrickColor.Color
-                end
-            elseif child:IsA("Model") and child:FindFirstChild("Handle") then
-                local handle = child:FindFirstChild("Handle")
-                if handle:IsA("Part") and handle.BrickColor then
-                    itemColor = handle.BrickColor.Color
-                end
+            local itemButton = Instance.new("ImageButton")
+            itemButton.Size = UDim2.new(0, 50, 0, 50)
+            itemButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+            itemButton.BackgroundTransparency = 0.3
+            itemButton.BorderSizePixel = 1
+            itemButton.BorderColor3 = Color3.fromRGB(255, 100, 255)
+            itemButton.Image = itemData.icon
+            itemButton.LayoutOrder = itemCount
+            itemButton.Parent = itemGrid
+
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            buttonCorner.Parent = itemButton
+
+            -- If no icon, show text
+            if itemData.icon == "rbxassetid://0" then
+                itemButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+                itemButton.BackgroundTransparency = 0.1
+
+                local nameLabel = Instance.new("TextLabel")
+                nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+                nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Text = itemData.name:sub(1, 4)
+                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                nameLabel.TextScaled = true
+                nameLabel.Font = Enum.Font.GothamBold
+                nameLabel.Parent = itemButton
             end
 
-            itemButton.BackgroundColor3 = itemColor
-            itemButton.BackgroundTransparency = 0.1
-
-            -- Add item name as small text
-            local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-            nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
-            nameLabel.BackgroundTransparency = 1
-            nameLabel.Text = itemData.name:sub(1, 4)  -- First 4 letters
-            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            nameLabel.TextScaled = true
-            nameLabel.Font = Enum.Font.GothamBold
-            nameLabel.Parent = itemButton
-        end
-
-        -- Add tooltip with full item name
-        local tooltip = Instance.new("TextLabel")
-        tooltip.Size = UDim2.new(0, 150, 0, 25)
-        tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        tooltip.BackgroundTransparency = 0.3
-        tooltip.Text = itemData.name .. " (" .. itemData.type .. ")"
-        tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
-        tooltip.TextScaled = true
-        tooltip.Font = Enum.Font.Gotham
-        tooltip.Visible = false
-        tooltip.ZIndex = 10
-        tooltip.Parent = itemButton
-
-        local tooltipCorner = Instance.new("UICorner")
-        tooltipCorner.CornerRadius = UDim.new(0, 3)
-        tooltipCorner.Parent = tooltip
-
-        -- Show/hide tooltip
-        itemButton.MouseEnter:Connect(function()
-            tooltip.Visible = true
-        end)
-
-        itemButton.MouseLeave:Connect(function()
+            -- Simple tooltip
+            local tooltip = Instance.new("TextLabel")
+            tooltip.Size = UDim2.new(0, 120, 0, 20)
+            tooltip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            tooltip.BackgroundTransparency = 0.5
+            tooltip.Text = itemData.name
+            tooltip.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tooltip.TextScaled = true
+            tooltip.Font = Enum.Font.Gotham
             tooltip.Visible = false
-        end)
+            tooltip.ZIndex = 10
+            tooltip.Parent = itemButton
 
-        -- Click to get/give this item
-        itemButton.MouseButton1Click:Connect(function()
-            updateStatus("Attempting to give: " .. itemData.name)
-            task.spawn(function()
-                local success = false
+            local tooltipCorner = Instance.new("UICorner")
+            tooltipCorner.CornerRadius = UDim.new(0, 3)
+            tooltipCorner.Parent = tooltip
 
-                -- Always try to clone and add to backpack first (works for items you don't have)
+            itemButton.MouseEnter:Connect(function()
+                tooltip.Visible = true
+            end)
+
+            itemButton.MouseLeave:Connect(function()
+                tooltip.Visible = false
+            end)
+
+            itemButton.MouseButton1Click:Connect(function()
+                updateStatus("Giving: " .. itemData.name)
                 local backpack = player:FindFirstChild("Backpack")
-                if backpack then
-                    -- Check if item already exists
-                    local existingItem = backpack:FindFirstChild(itemData.name)
-                    if not existingItem then
-                        pcall(function()
-                            local clonedItem = itemData.object:Clone()
-                            clonedItem.Parent = backpack
-                            success = true
-                            print("[Islands Dupe] Added " .. itemData.name .. " to backpack")
-                        end)
-                    else
-                        updateStatus("Item already in backpack: " .. itemData.name)
-                        return
-                    end
-                end
-
-                -- Then try server-side methods for persistence if remotes are available
-                if #allRemotes > 0 then
-                    for _, remote in ipairs(allRemotes) do
-                        local argSets = {
-                            {itemData.name, 1},
-                            {itemData.name, 1, player},
-                            {player, itemData.name, 1},
-                            {"give", itemData.name, 1},
-                            {"add", itemData.name, 1},
-                            {itemData.name, 1, "inventory"},
-                            {itemData.name, 1, "give"},
-                            {itemData.name, 1, "backpack"},
-                            {itemData.name, 1, "storage"}
-                        }
-
-                        for _, args in ipairs(argSets) do
-                            local ok = pcall(function()
-                                if remote:IsA("RemoteEvent") then
-                                    remote:FireServer(unpack(args))
-                                else
-                                    remote:InvokeServer(unpack(args))
-                                end
-                            end)
-
-                            if ok then
-                                print("[Islands Dupe] Server confirmed " .. itemData.name)
-                                success = true
-                                break
-                            end
-                        end
-                        if success then break end
-                    end
+                if backpack and not backpack:FindFirstChild(itemData.name) then
+                    pcall(function()
+                        local clonedItem = itemData.object:Clone()
+                        clonedItem.Parent = backpack
+                        updateStatus("Added: " .. itemData.name)
+                    end)
                 else
-                    print("[Islands Dupe] No remotes found, using local clone only")
-                end
-
-                -- Save data for persistence
-                local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
-                saveData(saveRemote)
-
-                if success then
-                    updateStatus("Gave: " .. itemData.name)
-                else
-                    updateStatus("Failed to give: " .. itemData.name)
+                    updateStatus("Item already exists or no backpack")
                 end
             end)
-        end)
 
-        table.insert(allItems, itemData)
-        itemCount = itemCount + 1
+            table.insert(allItems, itemData)
+            itemCount = itemCount + 1
+        end
+
+        -- Delay between batches
+        if batchEnd < #sortedItems then
+            task.wait(0.02)
+        end
     end
 
-    -- Calculate proper CanvasSize based on grid layout
-    local itemsPerRow = math.floor(itemGrid.AbsoluteSize.X / 65)  -- 60px item + 5px padding
+    -- Calculate CanvasSize
+    local itemsPerRow = math.floor(itemGrid.AbsoluteSize.X / 65)
     if itemsPerRow < 1 then itemsPerRow = 1 end
     local rows = math.ceil(itemCount / itemsPerRow)
-    itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)  -- 60px item + 5px padding
+    itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)
 
-    updateStatus("Found " .. itemCount .. " items (sorted alphabetically).")
+    updateStatus("Found " .. itemCount .. " items.")
 end
 
-local function saveData(remote)
-    if remote then
-        pcall(function()
-            if remote:IsA("RemoteEvent") then
-                remote:FireServer()
-            else
-                remote:InvokeServer()
-            end
-        end)
-    end
-end
-
-
-
+-- Events
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == Enum.KeyCode.G then
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then
-            -- Stop script
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
             screenGui:Destroy()
             updateStatus("Script stopped.")
-            print("[Islands Dupe] Script stopped with Shift+G")
         else
-            -- Toggle main UI
             enabled = not enabled
             mainFrame.Visible = enabled
-            updateStatus(enabled and "Main UI enabled" or "Main UI disabled")
         end
     elseif input.KeyCode == Enum.KeyCode.H then
-        -- Toggle item browser UI
         itemBrowserEnabled = not itemBrowserEnabled
         itemBrowserFrame.Visible = itemBrowserEnabled
         if itemBrowserEnabled then
             updateStatus("Scanning remotes and items...")
             scanRemotes()
-            task.wait(0.5)  -- Wait for remote scan to complete
+            task.wait(0.5)
             scanItems()
         end
-        updateStatus(itemBrowserEnabled and "Item Browser enabled (H to toggle)" or "Item Browser disabled")
+        updateStatus(itemBrowserEnabled and "Item Browser enabled" or "Item Browser disabled")
     end
 end)
 
-updateStatus("Script loaded. G: toggle main UI, Shift+G: stop script, H: toggle item browser")
-print("[Islands Dupe] Simplified script loaded with item browser (H key)")
+updateStatus("Script loaded. G: toggle main UI, Shift+G: stop, H: item browser")
+print("[Islands Dupe] Optimized script loaded")
