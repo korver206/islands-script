@@ -153,6 +153,35 @@ local function updateStatus(text)
     print("[Islands Dupe] " .. text)
 end
 
+-- Override print to also show in UI
+local oldPrint = print
+print = function(...)
+    local args = {...}
+    local message = table.concat(args, " ")
+    addConsoleMessage("[PRINT] " .. message, Enum.MessageType.MessageOutput)
+    return oldPrint(...)
+end
+
+local oldWarn = warn
+warn = function(...)
+    local args = {...}
+    local message = table.concat(args, " ")
+    addConsoleMessage("[WARN] " .. message, Enum.MessageType.MessageWarning)
+    return oldWarn(...)
+end
+
+local oldError = error
+error = function(message, level)
+    addConsoleMessage("[ERROR] " .. tostring(message), Enum.MessageType.MessageError)
+    return oldError(message, level)
+end
+
+-- Also capture LogService messages
+local LogService = game:GetService("LogService")
+LogService.MessageOut:Connect(function(message, messageType)
+    addConsoleMessage("[LOG] " .. message, messageType)
+end)
+
 local function categorizeItem(itemName)
     itemName = itemName:lower()
 
@@ -442,9 +471,11 @@ local function scanItems()
     updateStatus("Scanning items...")
     allItems = {}
 
-    local areas = {ReplicatedStorage, workspace}
+    local areas = {ReplicatedStorage, workspace, game:GetService("StarterPack")}
+    if player:FindFirstChild("Backpack") then
+        table.insert(areas, player.Backpack)
+    end
     local foundItems = {}
-    local scanLimit = 300  -- Increased limit
     local scannedCount = 0
     local toolsFound = 0
     local modelsFound = 0
@@ -456,10 +487,6 @@ local function scanItems()
         local descendants = area:GetDescendants()
         for i, child in ipairs(descendants) do
             scannedCount = scannedCount + 1
-            if scannedCount > scanLimit then
-                print("[Islands Dupe] Scan limit reached at " .. scannedCount)
-                break
-            end
 
             if scannedCount % 50 == 0 then
                 task.wait(0.01)
@@ -522,9 +549,6 @@ local function scanItems()
                 table.insert(foundItems, itemData)
                 print("[Islands Dupe] Found " .. itemType .. ": " .. itemName .. " -> " .. category)
             end
-        end
-        if scannedCount > scanLimit then
-            break
         end
     end
 
