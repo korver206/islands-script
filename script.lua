@@ -206,23 +206,71 @@ local function scanRemotes()
     updateStatus("Scanning for duplication remotes...")
     allRemotes = {}
 
-    local areas = {ReplicatedStorage, workspace}
+    -- Comprehensive list of areas to search
+    local areas = {
+        ReplicatedStorage,
+        workspace,
+        game:GetService("Lighting"),
+        game:GetService("SoundService"),
+        game:GetService("StarterGui"),
+        game:GetService("StarterPack"),
+        game:GetService("HttpService")
+    }
+
     if player.PlayerGui then
         table.insert(areas, player.PlayerGui)
     end
 
-    for _, area in ipairs(areas) do
-        for _, child in ipairs(area:GetDescendants()) do
-            if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                table.insert(allRemotes, child)
-            end
+    -- Add all services
+    for _, service in ipairs(game:GetChildren()) do
+        if service:IsA("Service") and not table.find(areas, service) then
+            table.insert(areas, service)
         end
     end
 
+    -- Search for remotes in all areas
+    for _, area in ipairs(areas) do
+        pcall(function()
+            for _, child in ipairs(area:GetDescendants()) do
+                if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+                    table.insert(allRemotes, child)
+                end
+            end
+        end)
+    end
+
+    -- Also search for remotes with specific names that might be obfuscated
+    local specificNames = {
+        "Remote", "Event", "Function", "Server", "Client",
+        "Inventory", "Item", "Give", "Add", "Remove", "Update",
+        "Craft", "Process", "Furnace", "Anvil", "Workbench",
+        "Storage", "Chest", "Container", "Backpack",
+        "Data", "Save", "Load", "Sync", "Network"
+    }
+
+    for _, area in ipairs(areas) do
+        pcall(function()
+            for _, child in ipairs(area:GetDescendants()) do
+                if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
+                    for _, name in ipairs(specificNames) do
+                        if string.find(child.Name:lower(), name:lower()) then
+                            if not table.find(allRemotes, child) then
+                                table.insert(allRemotes, child)
+                            end
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    end
+
     if #allRemotes > 0 then
-        updateStatus("Found " .. #allRemotes .. " remotes. Ready to duplicate.")
+        updateStatus("Found " .. #allRemotes .. " remotes. Ready to give items.")
+        print("[Islands Dupe] Found remotes: " .. #allRemotes)
     else
-        updateStatus("No remotes found.")
+        updateStatus("No remotes found. Game may have updated.")
+        print("[Islands Dupe] No remotes found in any location")
     end
 end
 
@@ -404,21 +452,29 @@ local function scanItems()
         -- Click to get/give this item
         itemButton.MouseButton1Click:Connect(function()
             updateStatus("Attempting to give: " .. itemData.name)
-            -- Try to give this specific item
-            if #allRemotes > 0 then
-                task.spawn(function()
-                    local success = false
+            task.spawn(function()
+                local success = false
 
-                    -- First try to clone and add to backpack (works for items you don't have)
-                    local backpack = player:FindFirstChild("Backpack")
-                    if backpack and not backpack:FindFirstChild(itemData.name) then
-                        local clonedItem = itemData.object:Clone()
-                        clonedItem.Parent = backpack
-                        success = true
-                        print("[Islands Dupe] Added " .. itemData.name .. " to backpack")
+                -- Always try to clone and add to backpack first (works for items you don't have)
+                local backpack = player:FindFirstChild("Backpack")
+                if backpack then
+                    -- Check if item already exists
+                    local existingItem = backpack:FindFirstChild(itemData.name)
+                    if not existingItem then
+                        pcall(function()
+                            local clonedItem = itemData.object:Clone()
+                            clonedItem.Parent = backpack
+                            success = true
+                            print("[Islands Dupe] Added " .. itemData.name .. " to backpack")
+                        end)
+                    else
+                        updateStatus("Item already in backpack: " .. itemData.name)
+                        return
                     end
+                end
 
-                    -- Then try server-side methods for persistence
+                -- Then try server-side methods for persistence if remotes are available
+                if #allRemotes > 0 then
                     for _, remote in ipairs(allRemotes) do
                         local argSets = {
                             {itemData.name, 1},
@@ -427,7 +483,9 @@ local function scanItems()
                             {"give", itemData.name, 1},
                             {"add", itemData.name, 1},
                             {itemData.name, 1, "inventory"},
-                            {itemData.name, 1, "give"}
+                            {itemData.name, 1, "give"},
+                            {itemData.name, 1, "backpack"},
+                            {itemData.name, 1, "storage"}
                         }
 
                         for _, args in ipairs(argSets) do
@@ -442,23 +500,25 @@ local function scanItems()
                             if ok then
                                 print("[Islands Dupe] Server confirmed " .. itemData.name)
                                 success = true
+                                break
                             end
                         end
+                        if success then break end
                     end
+                else
+                    print("[Islands Dupe] No remotes found, using local clone only")
+                end
 
-                    -- Save data for persistence
-                    local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
-                    saveData(saveRemote)
+                -- Save data for persistence
+                local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
+                saveData(saveRemote)
 
-                    if success then
-                        updateStatus("Gave: " .. itemData.name)
-                    else
-                        updateStatus("Failed to give: " .. itemData.name)
-                    end
-                end)
-            else
-                updateStatus("No remotes found. Run main dupe first.")
-            end
+                if success then
+                    updateStatus("Gave: " .. itemData.name)
+                else
+                    updateStatus("Failed to give: " .. itemData.name)
+                end
+            end)
         end)
 
         table.insert(allItems, itemData)
@@ -502,6 +562,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
         itemBrowserEnabled = not itemBrowserEnabled
         itemBrowserFrame.Visible = itemBrowserEnabled
         if itemBrowserEnabled then
+            updateStatus("Scanning remotes and items...")
+            scanRemotes()
+            task.wait(0.5)  -- Wait for remote scan to complete
             scanItems()
         end
         updateStatus(itemBrowserEnabled and "Item Browser enabled (H to toggle)" or "Item Browser disabled")
