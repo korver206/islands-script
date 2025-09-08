@@ -18,9 +18,17 @@ local delayTime = 2
 local allRemotes = {}
 
 -- UI Creation
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "IslandsDupeUI"
-screenGui.Parent = player:WaitForChild("PlayerGui")
+local success, screenGui = pcall(function()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "IslandsDupeUI"
+    gui.Parent = player:WaitForChild("PlayerGui")
+    return gui
+end)
+
+if not success then
+    warn("[Islands Dupe] Failed to create ScreenGui: " .. tostring(screenGui))
+    return
+end
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 400, 0, 600)
@@ -501,7 +509,7 @@ local function duplicateItem()
             end)
         end
 
-        wait(delayTime)
+        task.wait(delayTime)
     end
 
     updateStatus("Added " .. successCount .. "/" .. amount .. " items to backpack. Check persistence by relogging.")
