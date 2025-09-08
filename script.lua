@@ -324,20 +324,21 @@ local function displayItemsForTab()
             buttonCorner.CornerRadius = UDim.new(0, 5)
             buttonCorner.Parent = itemButton
 
-            -- If no icon, show text
+            -- Always show name bubble for every item
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+            nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Text = itemData.name:sub(1, 4)
+            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+            nameLabel.TextScaled = true
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.Parent = itemButton
+
+            -- If no icon, adjust background for visibility
             if itemData.icon == "rbxassetid://0" then
                 itemButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
                 itemButton.BackgroundTransparency = 0.1
-
-                local nameLabel = Instance.new("TextLabel")
-                nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
-                nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
-                nameLabel.BackgroundTransparency = 1
-                nameLabel.Text = itemData.name:sub(1, 4)
-                nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-                nameLabel.TextScaled = true
-                nameLabel.Font = Enum.Font.GothamBold
-                nameLabel.Parent = itemButton
             end
 
             -- Enhanced tooltip with category
