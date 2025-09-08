@@ -35,27 +35,6 @@ local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 10)
 corner.Parent = mainFrame
 
-local dupeButton = Instance.new("TextButton")
-dupeButton.Size = UDim2.new(0.9, 0, 0, 50)
-dupeButton.Position = UDim2.new(0.05, 0, 0, 20)
-dupeButton.Text = "DUPLICATE ITEM"
-dupeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-dupeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-dupeButton.BorderSizePixel = 0
-dupeButton.Font = Enum.Font.GothamBold
-dupeButton.TextScaled = true
-dupeButton.Active = true
-dupeButton.Parent = mainFrame
-
-local dupeCorner = Instance.new("UICorner")
-dupeCorner.CornerRadius = UDim.new(0, 5)
-dupeCorner.Parent = dupeButton
-
-local magentaTrimDupe = Instance.new("UIStroke")
-magentaTrimDupe.Color = Color3.fromRGB(255, 100, 255)
-magentaTrimDupe.Thickness = 2
-magentaTrimDupe.Parent = dupeButton
-
 local function shimmerEffect(stroke)
     local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
     local goal1 = {Color = Color3.fromRGB(255, 100, 255)}
@@ -66,13 +45,11 @@ local function shimmerEffect(stroke)
     tween2:Play()
 end
 
-shimmerEffect(magentaTrimDupe)
-
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(0.9, 0, 0, 60)
-statusLabel.Position = UDim2.new(0.05, 0, 0, 80)
+statusLabel.Position = UDim2.new(0.05, 0, 0, 20)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Status: Ready. Hold an item and click DUPLICATE."
+statusLabel.Text = "Status: Press H to open Item Browser"
 statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 statusLabel.TextScaled = true
 statusLabel.TextWrapped = true
@@ -80,8 +57,8 @@ statusLabel.Font = Enum.Font.Gotham
 statusLabel.Parent = mainFrame
 
 local consoleFrame = Instance.new("ScrollingFrame")
-consoleFrame.Size = UDim2.new(0.9, 0, 0, 250)
-consoleFrame.Position = UDim2.new(0.05, 0, 0, 140)
+consoleFrame.Size = UDim2.new(0.9, 0, 0, 300)
+consoleFrame.Position = UDim2.new(0.05, 0, 0, 80)
 consoleFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 consoleFrame.BackgroundTransparency = 0.1
 consoleFrame.BorderSizePixel = 2
@@ -274,7 +251,7 @@ local function scanItems()
                 if child:IsA("Tool") then
                     -- Check for TextureId first
                     if child.TextureId and child.TextureId ~= "" then
-                        iconId = "rbxassetid://" .. child.TextureId:gsub("rbxassetid://", "")
+                        iconId = child.TextureId
                     end
 
                     -- Check for Icon child
@@ -286,20 +263,43 @@ local function scanItems()
                     if child:FindFirstChild("IconId") then
                         iconId = "rbxassetid://" .. tostring(child.IconId)
                     end
+
+                    -- Check for Decal in Handle
+                    if child:FindFirstChild("Handle") and child.Handle:FindFirstChildOfClass("Decal") then
+                        iconId = child.Handle.Decal.Texture
+                    end
                 elseif child:IsA("Model") then
                     local handle = child:FindFirstChild("Handle")
                     if handle then
                         if handle.TextureId and handle.TextureId ~= "" then
-                            iconId = "rbxassetid://" .. handle.TextureId:gsub("rbxassetid://", "")
+                            iconId = handle.TextureId
                         end
 
                         if handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
                             iconId = handle.Icon.Image
                         end
+
+                        -- Check for Decal in Handle
+                        if handle:FindFirstChildOfClass("Decal") then
+                            iconId = handle.Decal.Texture
+                        end
                     end
                 end
 
-                -- If no icon found, use a default placeholder
+                -- If no icon found, try to find any image in the object
+                if iconId == "" then
+                    for _, descendant in ipairs(child:GetDescendants()) do
+                        if descendant:IsA("ImageLabel") and descendant.Image and descendant.Image ~= "" then
+                            iconId = descendant.Image
+                            break
+                        elseif descendant:IsA("Decal") and descendant.Texture and descendant.Texture ~= "" then
+                            iconId = descendant.Texture
+                            break
+                        end
+                    end
+                end
+
+                -- If still no icon found, use a default placeholder
                 if iconId == "" then
                     iconId = "rbxassetid://0"  -- Transparent placeholder
                 end
@@ -343,12 +343,32 @@ local function scanItems()
         buttonCorner.CornerRadius = UDim.new(0, 5)
         buttonCorner.Parent = itemButton
 
-        -- Add item name as text overlay if no icon
+        -- If no icon found, try to use the item's appearance or create a simple visual
         if itemData.icon == "rbxassetid://0" then
+            -- Try to get the item's color or create a colored background
+            local itemColor = Color3.fromRGB(150, 150, 150)  -- Default gray
+
+            if child:IsA("Tool") and child:FindFirstChild("Handle") then
+                local handle = child.Handle
+                if handle:IsA("Part") and handle.BrickColor then
+                    itemColor = handle.BrickColor.Color
+                end
+            elseif child:IsA("Model") and child:FindFirstChild("Handle") then
+                local handle = child:FindFirstChild("Handle")
+                if handle:IsA("Part") and handle.BrickColor then
+                    itemColor = handle.BrickColor.Color
+                end
+            end
+
+            itemButton.BackgroundColor3 = itemColor
+            itemButton.BackgroundTransparency = 0.1
+
+            -- Add item name as small text
             local nameLabel = Instance.new("TextLabel")
-            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+            nameLabel.Position = UDim2.new(0, 0, 0.7, 0)
             nameLabel.BackgroundTransparency = 1
-            nameLabel.Text = itemData.name:sub(1, 3)  -- First 3 letters
+            nameLabel.Text = itemData.name:sub(1, 4)  -- First 4 letters
             nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
             nameLabel.TextScaled = true
             nameLabel.Font = Enum.Font.GothamBold
@@ -461,118 +481,7 @@ local function saveData(remote)
     end
 end
 
-local function duplicateItem()
-    print("[Islands Dupe] Duplicate button clicked")
-    if duplicating then return end
-    duplicating = true
 
-    local character = player.Character
-    if not character then
-        updateStatus("No character found.")
-        duplicating = false
-        return
-    end
-
-    local tool = character:FindFirstChildOfClass("Tool")
-    if not tool then
-        updateStatus("No tool held.")
-        duplicating = false
-        return
-    end
-
-    local backpack = player:FindFirstChild("Backpack")
-    if not backpack then
-        updateStatus("No backpack found.")
-        duplicating = false
-        return
-    end
-
-    updateStatus("Scanning and duplicating " .. tool.Name .. "...")
-
-    -- Auto scan if not done yet
-    if #allRemotes == 0 then
-        scanRemotes()
-        task.wait(0.5)
-    end
-
-    if #allRemotes == 0 then
-        updateStatus("No remotes found. Cannot duplicate.")
-        duplicating = false
-        return
-    end
-
-    -- Check if item already exists in backpack or hotbar (to avoid multiple instances)
-    local existingTool = nil
-    if backpack then
-        existingTool = backpack:FindFirstChild(tool.Name)
-    end
-    if not existingTool and character then
-        existingTool = character:FindFirstChild(tool.Name)
-    end
-    if existingTool then
-        updateStatus("Item already exists in inventory/hotbar. Cannot duplicate to avoid anti-cheat.")
-        duplicating = false
-        return
-    end
-
-    local successCount = 0
-    local amount = 1  -- Fixed to 1 for now, can be made configurable later
-
-    -- Add to backpack (local)
-    local cloneTool = tool:Clone()
-    cloneTool.Parent = backpack
-    successCount = successCount + 1
-
-    -- Try legitimate dupe in background
-    if #allRemotes > 0 then
-        task.spawn(function()
-            local triedArgs = 0
-            for _, remote in ipairs(allRemotes) do
-                local argSets = {
-                    {tool.Name, 1},
-                    {tool, 1},
-                    {tool.Name, amount},
-                    {player, tool.Name, 1},
-                    {1, tool.Name},
-                    {tool},
-                    {tool.Name, 1, "craft"},
-                    {player, tool.Name, 1, "process"},
-                    {tool.Name, 1, player.UserId},
-                    {"add", tool.Name, 1},
-                    {tool.Name, 1, "furnace"},
-                    {tool.Name, 1, "anvil"}
-                }
-
-                for _, args in ipairs(argSets) do
-                    triedArgs = triedArgs + 1
-                    local ok = pcall(function()
-                        if remote:IsA("RemoteEvent") then
-                            remote:FireServer(unpack(args))
-                        else
-                            remote:InvokeServer(unpack(args))
-                        end
-                    end)
-
-                    if ok then
-                        print("[Islands Dupe] Successfully fired remote " .. remote.Name .. " with args: " .. table.concat(args, ", "))
-                        -- Try to save data for persistence
-                        local saveRemote = findRemote({"save", "update", "datastore"}, ReplicatedStorage)
-                        saveData(saveRemote)
-                        break
-                    end
-                end
-            end
-
-            print("[Islands Dupe] Tried " .. triedArgs .. " arg combinations for legitimate dupe.")
-        end)
-    end
-
-    updateStatus("Added " .. successCount .. " item to backpack. Check persistence by relogging.")
-    duplicating = false
-end
-
--- Events
-dupeButton.MouseButton1Click:Connect(duplicateItem)
 
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
