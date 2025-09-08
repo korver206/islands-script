@@ -295,11 +295,13 @@ local function scanItems()
                 local iconId = ""
                 local itemType = child:IsA("Tool") and "Tool" or "Model"
 
-                -- Try to find icon in various places
+                -- Try to find icon in various places (improved for Roblox Islands)
                 if child:IsA("Tool") then
-                    -- Check for TextureId first
-                    if child.TextureId and child.TextureId ~= "" then
-                        iconId = child.TextureId
+                    -- Check for IconId first (common in Islands)
+                    if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") then
+                        iconId = "rbxassetid://" .. child.IconId.Value
+                    elseif child:FindFirstChild("IconId") and type(child.IconId) == "string" then
+                        iconId = "rbxassetid://" .. child.IconId
                     end
 
                     -- Check for Icon child
@@ -307,24 +309,48 @@ local function scanItems()
                         iconId = child.Icon.Image
                     end
 
-                    -- Check for IconId property
-                    if child:FindFirstChild("IconId") then
-                        iconId = "rbxassetid://" .. tostring(child.IconId)
+                    -- Check for TextureId
+                    if child.TextureId and child.TextureId ~= "" then
+                        iconId = child.TextureId
                     end
 
                     -- Check for Decal in Handle
                     if child:FindFirstChild("Handle") and child.Handle:FindFirstChildOfClass("Decal") then
                         iconId = child.Handle.Decal.Texture
                     end
+
+                    -- Check for Icon in Handle
+                    if child:FindFirstChild("Handle") and child.Handle:FindFirstChild("Icon") then
+                        local handleIcon = child.Handle.Icon
+                        if handleIcon:IsA("ImageLabel") then
+                            iconId = handleIcon.Image
+                        elseif handleIcon:IsA("Decal") then
+                            iconId = handleIcon.Texture
+                        end
+                    end
                 elseif child:IsA("Model") then
                     local handle = child:FindFirstChild("Handle")
                     if handle then
-                        if handle.TextureId and handle.TextureId ~= "" then
-                            iconId = handle.TextureId
+                        -- Check for IconId in model
+                        if child:FindFirstChild("IconId") and child.IconId:IsA("StringValue") then
+                            iconId = "rbxassetid://" .. child.IconId.Value
+                        elseif child:FindFirstChild("IconId") and type(child.IconId) == "string" then
+                            iconId = "rbxassetid://" .. child.IconId
                         end
 
-                        if handle:FindFirstChild("Icon") and handle.Icon:IsA("ImageLabel") then
-                            iconId = handle.Icon.Image
+                        -- Check for Icon in handle
+                        if handle:FindFirstChild("Icon") then
+                            local handleIcon = handle.Icon
+                            if handleIcon:IsA("ImageLabel") then
+                                iconId = handleIcon.Image
+                            elseif handleIcon:IsA("Decal") then
+                                iconId = handleIcon.Texture
+                            end
+                        end
+
+                        -- Check for TextureId
+                        if handle.TextureId and handle.TextureId ~= "" then
+                            iconId = handle.TextureId
                         end
 
                         -- Check for Decal in Handle
@@ -332,6 +358,23 @@ local function scanItems()
                             iconId = handle.Decal.Texture
                         end
                     end
+                end
+
+                -- Search for icon in ReplicatedStorage (common location for Islands icons)
+                if iconId == "" then
+                    pcall(function()
+                        for _, item in ipairs(ReplicatedStorage:GetDescendants()) do
+                            if item.Name == child.Name .. "Icon" or item.Name == child.Name .. "_Icon" then
+                                if item:IsA("StringValue") and item.Value ~= "" then
+                                    iconId = "rbxassetid://" .. item.Value
+                                    break
+                                elseif item:IsA("ImageLabel") and item.Image ~= "" then
+                                    iconId = item.Image
+                                    break
+                                end
+                            end
+                        end
+                    end)
                 end
 
                 -- If no icon found, try to find any image in the object
@@ -342,6 +385,9 @@ local function scanItems()
                             break
                         elseif descendant:IsA("Decal") and descendant.Texture and descendant.Texture ~= "" then
                             iconId = descendant.Texture
+                            break
+                        elseif descendant:IsA("StringValue") and descendant.Name:lower():find("icon") and descendant.Value ~= "" then
+                            iconId = "rbxassetid://" .. descendant.Value
                             break
                         end
                     end
@@ -525,7 +571,12 @@ local function scanItems()
         itemCount = itemCount + 1
     end
 
-    itemGrid.CanvasSize = UDim2.new(0, 0, 0, math.ceil(itemCount / 6) * 65)
+    -- Calculate proper CanvasSize based on grid layout
+    local itemsPerRow = math.floor(itemGrid.AbsoluteSize.X / 65)  -- 60px item + 5px padding
+    if itemsPerRow < 1 then itemsPerRow = 1 end
+    local rows = math.ceil(itemCount / itemsPerRow)
+    itemGrid.CanvasSize = UDim2.new(0, 0, 0, rows * 65)  -- 60px item + 5px padding
+
     updateStatus("Found " .. itemCount .. " items (sorted alphabetically).")
 end
 
