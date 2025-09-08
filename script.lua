@@ -78,6 +78,7 @@ dupeButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 dupeButton.BorderSizePixel = 0
 dupeButton.Font = Enum.Font.GothamBold
 dupeButton.TextScaled = true
+dupeButton.Active = true
 dupeButton.Parent = mainFrame
 
 local dupeCorner = Instance.new("UICorner")
@@ -110,6 +111,7 @@ debugButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 debugButton.BorderSizePixel = 0
 debugButton.Font = Enum.Font.GothamBold
 debugButton.TextScaled = true
+debugButton.Active = true
 debugButton.Parent = mainFrame
 
 local debugCorner = Instance.new("UICorner")
@@ -132,6 +134,7 @@ scanButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 scanButton.BorderSizePixel = 0
 scanButton.Font = Enum.Font.GothamBold
 scanButton.TextScaled = true
+scanButton.Active = true
 scanButton.Parent = mainFrame
 
 local scanCorner = Instance.new("UICorner")
@@ -320,6 +323,7 @@ local function findRemote(names, parent)
 end
 
 local function scanRemotes()
+    print("[Islands Dupe] Scan button clicked")
     updateStatus("Scanning all remotes...")
     for _, child in ipairs(scanResults:GetChildren()) do
         if child:IsA("TextLabel") then
@@ -377,6 +381,7 @@ local function saveData(remote)
 end
 
 local function toggleDebug()
+    print("[Islands Dupe] Debug button clicked")
     debugMode = not debugMode
     updateStatus(debugMode and "Debug ON" or "Debug OFF")
     debugButton.Text = "Debug " .. (debugMode and "ON" or "OFF")
@@ -409,6 +414,7 @@ local function findClosestChest(character)
 end
 
 local function duplicateItem()
+    print("[Islands Dupe] Duplicate button clicked")
     if duplicating then return end
     duplicating = true
 
@@ -536,6 +542,7 @@ clearButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 clearButton.BorderSizePixel = 0
 clearButton.Font = Enum.Font.GothamBold
 clearButton.TextScaled = true
+clearButton.Active = true
 clearButton.Parent = mainFrame
 
 local clearCorner = Instance.new("UICorner")
@@ -558,6 +565,7 @@ copyButton.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
 copyButton.BorderSizePixel = 0
 copyButton.Font = Enum.Font.GothamBold
 copyButton.TextScaled = true
+copyButton.Active = true
 copyButton.Parent = mainFrame
 
 local copyCorner = Instance.new("UICorner")
